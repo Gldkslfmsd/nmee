@@ -31,8 +31,10 @@ parallel (see rough-align.runner.sh).
 """
 
 import argparse
+import difflib
 import json
 import os
+import re
 import sys
 
 EPS = 1e-6
@@ -60,12 +62,102 @@ def find_golden_record(data_jsonl, rec_id):
     return None
 
 
-def build_golden_segment(golden, fallback_end):
+def normalize_word(w):
+    return re.sub(r"[^a-z0-9]", "", w.lower())
+
+
+def build_en_word_timeline(automatic_segments):
+    """Concatenate every word of the automatic English ASR ('en') segments,
+    in chronological order, keeping only words with plausible (non-point,
+    non-decreasing) timestamps. Returns a list of (word, start, end)."""
+    en_segments = automatic_segments.get("en") or []
+    timeline = []
+    for seg in sorted(en_segments, key=lambda s: s.get("start") if isinstance(s.get("start"), (int, float)) else 0.0):
+        times = word_times(seg)
+        if times is None:
+            continue
+        words = seg.get("words") or []
+        for w, (start, end) in zip(words, times):
+            text = w.get("word")
+            if text:
+                timeline.append((text, start, end))
+    return timeline
+
+
+def anchor_golden_word_times(golden_words, en_timeline, duration):
+    """Estimate a real (start, end) timestamp for every golden-transcript
+    word, anchored to the real per-word timestamps of the automatic English
+    ASR ('en') output (which is transcribing the very same audio), instead
+    of assuming golden words are evenly paced over the whole recording.
+
+    Golden and ASR text mostly agree word-for-word (same speech), so a
+    word-level sequence alignment (difflib, like a diff) between the two
+    gives frequent real-time anchor points throughout the recording. Golden
+    words that don't line up with any ASR word (ASR errors/omissions) are
+    filled in by linear interpolation *between their nearest anchors*
+    only -- not by spreading them over the whole file -- which keeps the
+    error local instead of letting it drift for the rest of the recording.
+
+    Returns a list of dicts {"start": s, "end": e, "anchored": bool}
+    parallel to golden_words. Falls back to old-style whole-file
+    proportional spread only if no anchors could be found at all (e.g. no
+    usable 'en' ASR output for this recording).
+    """
+    n = len(golden_words)
+    resolved = [None] * n  # each: (start, end, anchored)
+
+    if en_timeline:
+        g_norm = [normalize_word(w) for w in golden_words]
+        e_norm = [normalize_word(w) for w, _, _ in en_timeline]
+        sm = difflib.SequenceMatcher(None, g_norm, e_norm, autojunk=False)
+        for tag, g0, g1, e0, e1 in sm.get_opcodes():
+            if tag not in ("equal", "replace"):
+                continue
+            pair_n = min(g1 - g0, e1 - e0)
+            for k in range(pair_n):
+                _, e_start, e_end = en_timeline[e0 + k]
+                resolved[g0 + k] = (e_start, e_end, True)
+
+    # Fill any unresolved words by linear interpolation between the nearest
+    # resolved neighbors on either side (falling back to the recording's
+    # [0, duration] bounds past the first/last anchor).
+    anchor_idx = [i for i, r in enumerate(resolved) if r is not None]
+    if not anchor_idx:
+        # No anchors anywhere: behave like the old whole-file proportional
+        # spread so recordings without usable 'en' ASR still get *some*
+        # (coarse) estimate rather than crashing.
+        for i in range(n):
+            pos = 0.0 if n <= 1 else (i + 0.5) / n * duration
+            resolved[i] = (pos, pos, False)
+    else:
+        prev_i, prev_end = None, 0.0
+        for i in range(n):
+            if resolved[i] is not None:
+                prev_i, prev_end = i, resolved[i][1]
+                continue
+            # find next anchor at or after i
+            nxt_i = next((j for j in anchor_idx if j > (prev_i if prev_i is not None else -1) and j >= i), None)
+            next_start = resolved[nxt_i][0] if nxt_i is not None else duration
+            span_lo = prev_end
+            span_hi = next_start if next_start >= prev_end else prev_end
+            lo_idx = (prev_i + 1) if prev_i is not None else 0
+            hi_idx = nxt_i if nxt_i is not None else n
+            span_len = max(1, hi_idx - lo_idx)
+            frac = (i - lo_idx + 0.5) / span_len
+            pos = span_lo + frac * (span_hi - span_lo)
+            resolved[i] = (pos, pos, False)
+
+    return [{"start": s, "end": e, "anchored": a} for s, e, a in resolved]
+
+
+def build_golden_segment(golden, fallback_end, automatic_segments):
     """Return a pseudo-segment dict for the golden English transcript.
 
-    The golden words carry no timestamps, so word positions are spread
-    proportionally over the audio duration (see word_range_in_interval).
-    The segment spans the whole recording portion, i.e. [0, duration].
+    Golden words carry no timestamps of their own, so they are anchored to
+    the real per-word timestamps of the automatic English ASR output (see
+    anchor_golden_word_times), which is far more accurate than assuming a
+    constant speech rate over the whole (often ~10 minute) recording. The
+    segment spans the whole recording portion, i.e. [0, duration].
     """
     duration = None
     audio_info = golden.get("audio_info") or {}
@@ -74,7 +166,13 @@ def build_golden_segment(golden, fallback_end):
     if duration is None:
         duration = fallback_end
     transcript = golden.get("transcript") or ""
-    words = [{"word": w} for w in transcript.split()]
+    golden_words = transcript.split()
+    en_timeline = build_en_word_timeline(automatic_segments)
+    word_times_est = anchor_golden_word_times(golden_words, en_timeline, duration)
+    words = [
+        {"word": w, "start": t["start"], "end": t["end"], "anchored": t["anchored"]}
+        for w, t in zip(golden_words, word_times_est)
+    ]
     return {"start": 0.0, "end": duration, "segment": transcript, "words": words}
 
 
@@ -248,7 +346,7 @@ def main():
             if isinstance(seg.get("end"), (int, float)):
                 fallback_end = max(fallback_end, seg["end"])
 
-    golden_seg = build_golden_segment(golden, fallback_end)
+    golden_seg = build_golden_segment(golden, fallback_end, automatic_segments)
     g_start, g_end = golden_seg["start"], golden_seg["end"]
     g_words = golden_seg["words"]
     g_n = len(g_words)
@@ -272,6 +370,14 @@ def main():
                 "transcript": golden.get("transcript"),
                 "audio_file_path": golden.get("audio_file_path"),
                 "audio_info": golden.get("audio_info"),
+                # Real per-word timestamps for the golden transcript, anchored
+                # to the automatic English ASR's own word-level timestamps
+                # (see anchor_golden_word_times) rather than assumed to be
+                # evenly spaced over the whole recording. "anchored": true
+                # means this word was matched directly to an ASR word;
+                # "anchored": false means its time was interpolated between
+                # the nearest anchors.
+                "words": g_words,
             }
         ),
         "segments": [],
@@ -310,6 +416,25 @@ def main():
                 g_range = (1, min(g_cnt, g_n)) if g_n else None
                 auto_range = (1, min(auto_cnt, auto_n)) if auto_n else None
 
+            # Tight real-time bounds for exactly the words in each range
+            # (not the whole segment's [start, end]), read straight from the
+            # per-word timestamps -- golden's are anchored to the automatic
+            # English ASR (see build_golden_segment), the automatic
+            # segment's are its own ASR/MT word timestamps when usable.
+            golden_word_time_range = None
+            if g_range:
+                golden_word_time_range = [
+                    g_words[g_range[0] - 1]["start"],
+                    g_words[g_range[1] - 1]["end"],
+                ]
+            automatic_word_time_range = None
+            auto_times = word_times(auto_seg)
+            if auto_range and auto_times:
+                automatic_word_time_range = [
+                    auto_times[auto_range[0] - 1][0],
+                    auto_times[auto_range[1] - 1][1],
+                ]
+
             entry = {
                 "automatic_segment_index": auto_idx,
                 "start": auto_start,
@@ -327,6 +452,8 @@ def main():
                 ),
                 "golden_word_range": g_range,  # 1-based, inclusive
                 "automatic_word_range": auto_range,  # 1-based, inclusive
+                "golden_word_time_range": golden_word_time_range,  # [start, end] seconds
+                "automatic_word_time_range": automatic_word_time_range,  # [start, end] seconds
             }
             if g_range and auto_range:
                 entry["estimated_word_count_overlap"] = "approx. %s correspond to approx. %s" % (

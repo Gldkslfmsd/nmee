@@ -187,17 +187,30 @@ def locate_error_word_range(
 
 
 class GoldenSegmentData:
-    __slots__ = ("golden_words", "lang_segments")
+    __slots__ = ("golden_words", "golden_word_times", "lang_segments")
 
-    def __init__(self, golden_words: list[str], lang_segments: dict[str, list[dict]]):
+    def __init__(
+        self,
+        golden_words: list[str],
+        golden_word_times: list[dict],
+        lang_segments: dict[str, list[dict]],
+    ):
         self.golden_words = golden_words
+        self.golden_word_times = golden_word_times
         self.lang_segments = lang_segments
 
 
 def load_roughaligned(path: Path) -> dict[int, GoldenSegmentData]:
-    """Map golden_segment_index -> GoldenSegmentData for one roughaligned file."""
+    """Map golden_segment_index -> GoldenSegmentData for one roughaligned file.
+
+    golden_word_times are rough-align.py's real per-word timestamps for the
+    golden transcript (anchored to the automatic English ASR's own word
+    timestamps, see anchor_golden_word_times in rough-align.py), read
+    straight from the roughaligned file, not recomputed here.
+    """
     doc = json.loads(path.read_text(encoding="utf-8"))
     available_langs = [l for l in TARGET_AUTOMATIC_LANGS if l in doc.get("languages", {}).get("automatic", [])]
+    golden_word_times = doc.get("golden_reference", {}).get("words") or []
     out = {}
     for gseg in doc.get("segments", []):
         overlapping = gseg.get("automatic_overlapping_segments", {})
@@ -215,7 +228,9 @@ def load_roughaligned(path: Path) -> dict[int, GoldenSegmentData]:
                 for s in segs
             ]
         out[gseg["golden_segment_index"]] = GoldenSegmentData(
-            golden_words=gseg["transcript"].split(), lang_segments=lang_segments
+            golden_words=gseg["transcript"].split(),
+            golden_word_times=golden_word_times,
+            lang_segments=lang_segments,
         )
     return out
 
@@ -310,20 +325,34 @@ def cluster_occurrences(occurrences: list[dict]) -> list[list[dict]]:
 def reconstruct_context(
     gdata: GoldenSegmentData, word_range: tuple[int, int]
 ) -> tuple[Optional[float], Optional[float], dict[str, str]]:
-    """For a merged word range, reconstruct approximate start/end time
-    (from any overlapping original automatic segment) and, per language,
-    the full original automatic text overlapping that range."""
+    """For a merged word range, reconstruct the start/end time and, per
+    language, the full original automatic text overlapping that range.
+
+    start/end come straight from the golden transcript's own per-word
+    timestamps (golden_word_times, read from the roughaligned file's
+    golden_reference.words -- see load_roughaligned), i.e. exactly the
+    words in `word_range`, not from whichever automatic segment happens to
+    be tagged as overlapping. This matters: an automatic segment's
+    golden_word_range is only an estimate, so anchoring timing to it (as
+    used to be done here) could pick up a wrong/neighboring segment's
+    [start, end] whenever that estimate was slightly off. Golden's own
+    timestamps are anchored directly to the automatic English ASR's
+    real per-word timestamps (see anchor_golden_word_times in
+    rough-align.py), so they stay correct even when a particular
+    automatic segment's estimated golden_word_range is off.
+    """
     start_time = end_time = None
+    words = gdata.golden_word_times
+    lo, hi = word_range
+    if words and 1 <= lo <= len(words) and 1 <= hi <= len(words):
+        start_time = words[lo - 1].get("start")
+        end_time = words[hi - 1].get("end")
+
     full_text: dict[str, str] = {}
     for lang, segs in gdata.lang_segments.items():
         matching = [s for s in segs if s["golden_word_range"] and ranges_overlap(s["golden_word_range"], word_range)]
         matching.sort(key=lambda s: s["automatic_segment_index"])
         full_text[lang] = " ".join(s["segment"] for s in matching)
-        for s in matching:
-            if start_time is None or s["start"] < start_time:
-                start_time = s["start"]
-            if end_time is None or s["end"] > end_time:
-                end_time = s["end"]
     return start_time, end_time, full_text
 
 
