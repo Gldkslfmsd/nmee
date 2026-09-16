@@ -23,7 +23,14 @@ For each item we report:
   - automatic_outputs: per language (en/de/cs/pl/sk), the full original
     automatic text overlapping this item's timespan (read fresh from
     roughaligned data), plus "good" and "bad" renderings as judged by each
-    contributing model
+    contributing model. Each "bad" rendering may additionally carry a
+    "quote": a fine-grained substring of that rendering's own "text"
+    pinpointing the actual erroneous word/phrase, extracted from the
+    error's free-text "explanation" (which usually quotes the offending
+    span per language, e.g. "Czech 'zpoždění' (delay) ...") and matched
+    back against this rendering's text by string overlap. Falls back to
+    no "quote" (whole rendering is the only thing to go on) when the
+    explanation has no usable quote for that language.
 
 Output: ./merged_errors.json (full detail) and ./merged_errors.csv (flat
 summary for quick spreadsheet triage).
@@ -51,6 +58,79 @@ TARGET_AUTOMATIC_LANGS = ["en", "de", "cs", "pl", "sk"]
 # still be merged into the same cluster (absorbs small alignment jitter
 # between models/occurrences that are really about the same spot).
 GAP_TOLERANCE_WORDS = 3
+
+
+# ---------------------------------------------------------------------------
+# Fine-grained quote extraction from explanations
+#
+# An error's "explanation" (written by the divergence-finding LLM) is a
+# free-text sentence that usually quotes the actual offending word/phrase
+# per language, e.g. "German 'Rückstand', Czech 'zpoždění' (delay) and
+# Slovak 'nedostatky' ...". The per-language "bad" rendering we get from
+# "renderings" is the whole quoted sentence/clause though, which is why
+# highlighting used to bold the entire rendering instead of just the
+# erroneous word/phrase. Here we pull every quoted span out of the
+# explanation and, for each bad rendering, keep whichever one actually
+# overlaps that rendering's own text -- i.e. the quote that belongs to that
+# language, not some other language's quote that happens to sit nearby in
+# the same sentence.
+# ---------------------------------------------------------------------------
+
+QUOTE_PATTERNS = [
+    re.compile(r"'([^'\"‘’“”]{2,80})'"),   # straight single
+    re.compile(r'"([^\'\"‘’“”]{2,80})"'),  # straight double
+    re.compile(r"‘([^‘’]{2,80})’"),        # curly single
+    re.compile(r"“([^“”]{2,80})”"),        # curly double
+]
+
+
+def extract_quotes(explanation: str) -> list[str]:
+    """Pull every quoted substring out of an explanation string (any of the
+    straight/curly quote styles seen in practice)."""
+    quotes = []
+    for pattern in QUOTE_PATTERNS:
+        quotes.extend(m.group(1) for m in pattern.finditer(explanation))
+    return quotes
+
+
+def best_matching_quote(text: str, candidates: list[str]) -> Optional[str]:
+    """Among quoted spans pulled from an explanation, return whichever one
+    best overlaps `text` (one specific rendering), so a multi-language
+    explanation's quotes get attributed to the right language. Requires the
+    match to cover most of the candidate quote, so an unrelated quote (or an
+    accidental match, e.g. an English contraction's apostrophe pair) isn't
+    mistaken for a real one."""
+    best, best_size = None, 0
+    for cand in candidates:
+        cand = cand.strip()
+        if not cand:
+            continue
+        if cand in text:
+            size = len(cand)
+        else:
+            sm = difflib.SequenceMatcher(None, text, cand, autojunk=False)
+            size = sm.find_longest_match(0, len(text), 0, len(cand)).size
+        if size >= max(3, int(0.7 * len(cand))) and size > best_size:
+            best, best_size = cand, size
+    return best
+
+
+def annotate_renderings_with_quotes(explanation: str, renderings: list[dict]) -> list[dict]:
+    """Attach a "quote" field (the fine-grained erroneous span) to each
+    incorrect rendering, when the explanation's quotes let us confidently
+    identify one for that language."""
+    quotes = extract_quotes(explanation)
+    if not quotes:
+        return renderings
+    out = []
+    for r in renderings:
+        r2 = dict(r)
+        if r.get("correct") is False:
+            quote = best_matching_quote(r.get("text", ""), quotes)
+            if quote is not None:
+                r2["quote"] = quote
+        out.append(r2)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +265,7 @@ def collect_error_occurrences(model_name: str, model_doc: dict, golden_data: dic
             chunk_range = tuple(chunk["golden_word_range"])
             for err in chunk["errors"]:
                 word_range = locate_error_word_range(gdata.golden_words, chunk_range, err.get("source_words", ""))
+                explanation = err.get("explanation", "")
                 occurrences.append(
                     {
                         "model": model_name,
@@ -192,8 +273,8 @@ def collect_error_occurrences(model_name: str, model_doc: dict, golden_data: dic
                         "word_range": word_range,
                         "error_class": err.get("error_class", ""),
                         "source_words": err.get("source_words", ""),
-                        "explanation": err.get("explanation", ""),
-                        "renderings": err.get("renderings", []),
+                        "explanation": explanation,
+                        "renderings": annotate_renderings_with_quotes(explanation, err.get("renderings", [])),
                     }
                 )
     return occurrences
@@ -274,6 +355,8 @@ def build_item(source_file: str, file_id: str, gdata: GoldenSegmentData, cluster
                 if r.get("language") != lang:
                     continue
                 entry = {"model": o["model"], "text": r.get("text", "")}
+                if r.get("quote"):
+                    entry["quote"] = r["quote"]
                 (good if r.get("correct") else bad).append(entry)
         automatic_outputs[lang] = {"full_text": full_text.get(lang, ""), "good": good, "bad": bad}
 
