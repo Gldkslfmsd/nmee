@@ -1,0 +1,12 @@
+# rough-align.py uses only the Python standard library.
+# merged_errors_to_pearmut.py uses only the Python standard library too; it
+# shells out to the `ffmpeg`/`ffprobe` binaries (present at /usr/bin/ffmpeg
+# in this environment) to cut audio clips, so no pip package is needed.
+# find-bad-translation-divergencies.py needs DSPy + litellm (e-INFRA LLM gateway):
+dspy>=3.2
+# Pinned: litellm>=1.9x on Python 3.10 raises
+# "ImportError: cannot import name 'NotRequired' from 'typing'" the moment
+# dspy needs to inspect a litellm exception type (its Anthropic
+# experimental-pass-through submodule imports NotRequired unconditionally
+# from typing instead of falling back to typing_extensions on py<3.11).
+litellm==1.89.1
