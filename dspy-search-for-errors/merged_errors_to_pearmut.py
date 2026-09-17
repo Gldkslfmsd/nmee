@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Convert ./merged_errors.json into a Pearmut (github.com/zouharvi/pearmut)
-annotation-campaign JSON file, so humans can validate the translation errors
-found automatically by the LLM-based divergence finder.
+"""Convert ./35-merged-annotations.jsonl (the annotations.jsonl format
+documented in ../iwslt+claude-to-pearmut/README.md, one JSON object per
+line) into a Pearmut (github.com/zouharvi/pearmut) annotation-campaign JSON
+file, so humans can validate the translation errors found automatically by
+the LLM-based divergence finder.
 
-For each merged_errors.json item we build one Pearmut item:
+For each merged-annotations.jsonl line we build one Pearmut item:
   - a short audio clip (cut out of the long source_file mp3 with ffmpeg,
     using the item's "start"/"end" offsets) plus the golden_transcript text,
     shown as the source side;
@@ -38,8 +40,16 @@ Usage
     ./venv/bin/python merged_errors_to_pearmut.py --limit 100  # quick test run
 """
 
+# NOTE on reconstructing the old per-language picks from the new schema:
+# 30-merge-annotations.py's build_item() stores, per language, the pooled
+# "longest good+bad rendering" text as both `targets[].text` (for every
+# target of that language) and, redundantly, under the extra `automatic_texts`
+# field (also covering languages with no error at all, needed to fill
+# language slots when too few languages have errors) -- this lets us pick
+# the same per-language display text and the same "how many distinct models
+# flagged this language" ranking as the old merged_errors.json-based code did.
+
 import argparse
-import difflib
 import html
 import json
 import subprocess
@@ -106,7 +116,7 @@ def parse_id(item_id: str) -> tuple[str, float, float]:
 
 
 def is_valid_span(it: dict) -> bool:
-    start, end = it["start"], it["end"]
+    start, end = it["orig_start"], it["orig_end"]
     if start is None or end is None:
         return False
     _, long_start, long_end = parse_id(it["id"])
@@ -117,13 +127,14 @@ def is_valid_span(it: dict) -> bool:
 
 
 def padded_span(it: dict) -> tuple[float, float]:
-    """The item's exact [start, end] widened by CONTEXT_PAD_SECONDS on each
-    side (clamped to the recording's own duration) -- used only for cutting
-    a listenable audio clip, not for merged_errors.json's own start/end."""
+    """The item's exact [orig_start, orig_end] widened by
+    CONTEXT_PAD_SECONDS on each side (clamped to the recording's own
+    duration) -- used only for cutting a listenable audio clip, not for
+    merged-annotations.jsonl's own orig_start/orig_end."""
     _, long_start, long_end = parse_id(it["id"])
     duration = long_end - long_start
-    pad_start = max(0.0, it["start"] - CONTEXT_PAD_SECONDS)
-    pad_end = min(duration, it["end"] + CONTEXT_PAD_SECONDS)
+    pad_start = max(0.0, it["orig_start"] - CONTEXT_PAD_SECONDS)
+    pad_end = min(duration, it["orig_end"] + CONTEXT_PAD_SECONDS)
     return pad_start, pad_end
 
 
@@ -189,22 +200,6 @@ def verify_source_durations(audio_dir: Path, ids: set[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def find_highlight_span(text: str, needle: str) -> tuple[int, int] | None:
-    if not needle:
-        return None
-    idx = text.find(needle)
-    if idx != -1:
-        return idx, idx + len(needle)
-    idx = text.lower().find(needle.lower())
-    if idx != -1:
-        return idx, idx + len(needle)
-    sm = difflib.SequenceMatcher(None, text, needle, autojunk=False)
-    match = sm.find_longest_match(0, len(text), 0, len(needle))
-    if match.size >= max(4, len(needle) // 2):
-        return match.a, match.a + match.size
-    return None
-
-
 def bold_html(text: str, span: tuple[int, int] | None) -> str:
     if span is None:
         return html.escape(text)
@@ -216,36 +211,46 @@ def bold_html(text: str, span: tuple[int, int] | None) -> str:
     )
 
 
-def pick_lang_text_and_highlight(lang_data: dict) -> tuple[str, tuple[int, int] | None]:
-    good = lang_data.get("good", [])
-    bad = lang_data.get("bad", [])
-    pool = good + bad
-    base_text = max(pool, key=lambda r: len(r["text"]))["text"] if pool else lang_data.get("full_text", "")
+def targets_for_lang(it: dict, lang: str) -> list[dict]:
+    return [t for t in it.get("targets", []) if t.get("tgt_lan") == lang]
+
+
+def pick_lang_text_and_highlight(it: dict, lang: str) -> tuple[str, tuple[int, int] | None]:
+    """(base_text, highlight) for one language of one item. `text`/span/
+    span_start/span_end were already computed once by
+    30-merge-annotations.py's build_lang_targets() against the same pooled
+    "longest good+bad rendering" text stored in `automatic_texts`, so we
+    just reuse them here instead of re-deriving anything."""
+    base_text = it.get("automatic_texts", {}).get(lang, "")
+    bad = targets_for_lang(it, lang)
+    if not base_text and bad:
+        base_text = max(bad, key=lambda t: len(t["text"]))["text"]
+    # Only real, located matches (span_matched) count for highlighting -- a
+    # target whose quote couldn't be confidently located falls back to
+    # spanning the whole text (see find_span() in 30-merge-annotations.py),
+    # which must NOT be treated as "highlight everything".
+    matched = [t for t in bad if t.get("span_matched")]
     highlight = None
-    if bad:
-        best_bad = max(bad, key=lambda r: len(r["text"]))["text"]
-        highlight = find_highlight_span(base_text, best_bad)
+    if matched:
+        best = max(matched, key=lambda t: t["span_end"] - t["span_start"])
+        highlight = (best["span_start"], best["span_end"])
     return base_text, highlight
 
 
-def lang_available(automatic_outputs: dict, lang: str) -> bool:
-    d = automatic_outputs.get(lang)
-    if not d:
-        return False
-    return bool(d.get("good") or d.get("bad") or (d.get("full_text") or "").strip())
+def lang_available(it: dict, lang: str) -> bool:
+    return bool((it.get("automatic_texts", {}).get(lang) or "").strip()) or bool(targets_for_lang(it, lang))
 
 
-def lang_bad_score(automatic_outputs: dict, lang: str) -> int:
-    d = automatic_outputs.get(lang, {})
-    return len({b["model"] for b in d.get("bad", [])})
+def lang_bad_score(it: dict, lang: str) -> int:
+    return len({t.get("annotator_model") for t in targets_for_lang(it, lang)})
 
 
-def select_languages(automatic_outputs: dict) -> list[str]:
-    en_included = bool(automatic_outputs.get("en", {}).get("bad"))
-    non_en_avail = [lang for lang in NON_EN_LANGS if lang_available(automatic_outputs, lang)]
+def select_languages(it: dict) -> list[str]:
+    en_included = bool(targets_for_lang(it, "en"))
+    non_en_avail = [lang for lang in NON_EN_LANGS if lang_available(it, lang)]
     non_en_sorted = sorted(
         non_en_avail,
-        key=lambda lang: (-lang_bad_score(automatic_outputs, lang), NON_EN_PRIORITY[lang]),
+        key=lambda lang: (-lang_bad_score(it, lang), NON_EN_PRIORITY[lang]),
     )
     need = 2 if en_included else 3
     selected = set(non_en_sorted[:need])
@@ -257,11 +262,6 @@ def select_languages(automatic_outputs: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 # Item construction
 # ---------------------------------------------------------------------------
-
-
-def make_item_id(it: dict) -> str:
-    lo, hi = it["golden_word_range"]
-    return f"{it['id']}__gi{it['golden_segment_index']}__w{lo}-{hi}"
 
 
 def audio_out_path(it: dict, data_dir: Path) -> Path:
@@ -280,19 +280,18 @@ def clip_start_offset(it: dict) -> float:
     (paused) playback position, via a #t= media-fragment, so pressing play
     jumps straight to the flagged span instead of the padding before it."""
     pad_start, _ = padded_span(it)
-    return max(0.0, it["start"] - pad_start)
+    return max(0.0, it["orig_start"] - pad_start)
 
 
 def build_item(it: dict, audio_url: str) -> dict | None:
-    automatic_outputs = it["automatic_outputs"]
-    langs = select_languages(automatic_outputs)
+    langs = select_languages(it)
     if not langs:
         return None
     tgt = {}
     for lang in langs:
-        base_text, span = pick_lang_text_and_highlight(automatic_outputs[lang])
+        base_text, span = pick_lang_text_and_highlight(it, lang)
         tgt[lang] = bold_html(base_text, span)
-    transcript_html = f'<b>Source (English) transcript:</b> {html.escape(it["golden_transcript"])}'
+    transcript_html = f'<b>Source (English) transcript:</b> {html.escape(it["gold_transcript"])}'
     # Media Fragments URI (#t=<seconds>): sets the player's initial playback
     # position without autoplaying -- it stays paused until the user presses
     # play, at which point it starts from that offset (native browser
@@ -301,7 +300,7 @@ def build_item(it: dict, audio_url: str) -> dict | None:
     audio_url_with_offset = f"{audio_url}#t={offset:.2f}"
     src_html = f'<audio controls src="{html.escape(audio_url_with_offset)}" type="audio/mpeg"></audio>'
     return {
-        "item_id": make_item_id(it),
+        "item_id": it["doc_id"],
         "instructions": transcript_html,
         "src": src_html,
         "tgt": tgt,
@@ -315,7 +314,7 @@ def build_item(it: dict, audio_url: str) -> dict | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--merged-errors", default=str(SCRIPT_DIR / "merged_errors.json"))
+    parser.add_argument("--merged-errors", default=str(SCRIPT_DIR / "35-merged-annotations.jsonl"))
     parser.add_argument(
         "--audio-dir",
         default=str(SCRIPT_DIR / "input" / "no-more-embarrassing-errors-dominik" / "earnings-25" / "testset-segmented" / "audio"),
@@ -334,8 +333,12 @@ def main() -> None:
     audio_dir = Path(args.audio_dir)
     data_dir = Path(args.data_dir)
 
-    all_items = json.loads(Path(args.merged_errors).read_text(encoding="utf-8"))
-    print(f"loaded {len(all_items)} merged_errors items")
+    all_items = [
+        json.loads(line)
+        for line in Path(args.merged_errors).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    print(f"loaded {len(all_items)} merged-annotations items")
 
     valid_items = [it for it in all_items if is_valid_span(it)]
     skipped = len(all_items) - len(valid_items)
@@ -373,8 +376,6 @@ def main() -> None:
     # Build Pearmut items.
     items = []
     skipped_no_lang = 0
-    unmatched_highlights = 0
-    total_bad_highlights = 0
     for it in valid_items:
         out_path = audio_out_path(it, data_dir)
         # Relative (not "/assets/...") so it resolves under a reverse-proxy
@@ -387,9 +388,6 @@ def main() -> None:
             skipped_no_lang += 1
             continue
         items.append(item)
-        for lang_data in it["automatic_outputs"].values():
-            if lang_data.get("bad"):
-                total_bad_highlights += 1
 
     print(f"built {len(items)} Pearmut items ({skipped_no_lang} skipped: no candidate language)")
 

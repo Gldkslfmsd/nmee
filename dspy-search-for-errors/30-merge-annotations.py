@@ -32,8 +32,16 @@ For each item we report:
     no "quote" (whole rendering is the only thing to go on) when the
     explanation has no usable quote for that language.
 
-Output: ./merged_errors.json (full detail) and ./merged_errors.csv (flat
-summary for quick spreadsheet triage).
+Output: ./35-merged-annotations.jsonl, one JSON object per line in the
+`annotations.jsonl` format documented in ../iwslt+claude-to-pearmut/README.md
+(one object per merged error cluster, with a "targets" list holding one
+entry per flagged language/rendering), plus ./35-merged-annotations.csv (flat
+summary for quick spreadsheet triage). Fields beyond the README's schema
+(source_file, golden_segment_index, golden_word_range, num_models_reporting,
+models_reporting, automatic_texts) are kept as extra, non-required data --
+the README explicitly allows this -- so merged_errors_to_pearmut.py can
+rebuild the exact same Pearmut campaign it used to build from the old
+merged_errors.json.
 
 Usage
 -----
@@ -356,6 +364,101 @@ def reconstruct_context(
     return start_time, end_time, full_text
 
 
+def find_span(text: str, needle: str) -> tuple[str, int, int, bool]:
+    """Locate `needle` inside `text` (exact, case-insensitive, or best
+    difflib match) and return (span, span_start, span_end, matched) such
+    that `span == text[span_start:span_end]` always holds exactly --
+    required by the annotations.jsonl target schema, which has no way to
+    express "unknown location". When nothing usable is found, falls back to
+    the whole text with matched=False, so callers that care (e.g. picking
+    which error to visually highlight) can tell a real location from this
+    fallback."""
+    if not needle or not text:
+        return text, 0, len(text), False
+    idx = text.find(needle)
+    if idx != -1:
+        return text[idx : idx + len(needle)], idx, idx + len(needle), True
+    idx = text.lower().find(needle.lower())
+    if idx != -1:
+        return text[idx : idx + len(needle)], idx, idx + len(needle), True
+    sm = difflib.SequenceMatcher(None, text, needle, autojunk=False)
+    match = sm.find_longest_match(0, len(text), 0, len(needle))
+    if match.size >= max(4, len(needle) // 2):
+        return text[match.a : match.a + match.size], match.a, match.a + match.size, True
+    return text, 0, len(text), False
+
+
+def build_lang_targets(lang: str, base_text: str, cluster: list[dict]) -> list[dict]:
+    """Build the annotations.jsonl `targets[]` entries for one language of
+    one merged cluster: one entry per (contributing model, bad rendering).
+    All entries for the same (cluster, lang) share the same "system" and
+    "text" (the pooled-longest rendering, `base_text`), per the README's
+    "several errors in the same output are several entries with the same
+    system and text" rule; only span/intended/explanation vary."""
+    bad_pairs = []
+    good_texts = []
+    for o in cluster:
+        for r in o["renderings"]:
+            if r.get("language") != lang:
+                continue
+            if r.get("correct") is False:
+                bad_pairs.append((o, r))
+            elif r.get("correct"):
+                good_texts.append(r.get("text", ""))
+    if not bad_pairs:
+        return []
+
+    # Best-effort "intended" (what the span should have said): the longest
+    # rendering some other model judged *correct* for this same language and
+    # cluster, if any -- otherwise fall back to the original English words
+    # the error was anchored to, which is the closest thing we have.
+    intended_fallback = max(good_texts, key=len) if good_texts else None
+
+    system = "asr" if lang == "en" else "asr+mt"
+    error_source = "ASR" if lang == "en" else "MT"
+
+    targets = []
+    for o, r in bad_pairs:
+        span, span_start, span_end, span_matched = find_span(base_text, r.get("text", ""))
+        error_class = o.get("error_class", "")
+        explanation = o.get("explanation", "")
+        targets.append(
+            {
+                "tgt_lan": lang,
+                "system": system,
+                "text": base_text,
+                "reference": None,
+                "span": span,
+                "span_start": span_start,
+                "span_end": span_end,
+                "intended": intended_fallback if intended_fallback is not None else o.get("source_words", ""),
+                # We only have the divergence-finder's free-text error class,
+                # not a genuine harm judgement, so we can't confidently sort
+                # errors into the README's harm categories -- default to
+                # "Other" and keep the real class in `explanation`.
+                "harm_types": ["Other"],
+                # A "quote" was only attached when the explanation's own
+                # wording could be confidently matched to this rendering (see
+                # annotate_renderings_with_quotes); treat that as a stronger
+                # signal than a bare whole-rendering match.
+                "confidence": "harmful" if r.get("quote") else "borderline",
+                "borderline": not bool(r.get("quote")),
+                "explanation": f"{error_class}: {explanation}" if error_class else explanation,
+                "error_source": error_source,
+                # Extra, non-README bookkeeping: which divergence-finder LLM
+                # reported this, needed by merged_errors_to_pearmut.py to
+                # reproduce the old per-language "how many distinct models
+                # flagged this" ranking; and whether `span` is a real located
+                # match or just the find_span() whole-text fallback (needed
+                # to reproduce the old "don't highlight anything when we
+                # can't confidently locate the error" behavior).
+                "annotator_model": o["model"],
+                "span_matched": span_matched,
+            }
+        )
+    return targets
+
+
 def build_item(source_file: str, file_id: str, gdata: GoldenSegmentData, cluster: list[dict]) -> dict:
     starts = [o["word_range"][0] for o in cluster]
     ends = [o["word_range"][1] for o in cluster]
@@ -364,43 +467,44 @@ def build_item(source_file: str, file_id: str, gdata: GoldenSegmentData, cluster
     start_time, end_time, full_text = reconstruct_context(gdata, word_range)
 
     models_reporting = sorted({o["model"] for o in cluster})
-    explanations = [
-        {
-            "model": o["model"],
-            "error_class": o["error_class"],
-            "source_words": o["source_words"],
-            "explanation": o["explanation"],
-        }
-        for o in cluster
-    ]
 
-    automatic_outputs = {}
+    automatic_texts: dict[str, str] = {}
+    targets: list[dict] = []
     for lang in TARGET_AUTOMATIC_LANGS:
         if lang not in gdata.lang_segments:
             continue
-        good, bad = [], []
+        good_texts, bad_texts = [], []
         for o in cluster:
             for r in o["renderings"]:
                 if r.get("language") != lang:
                     continue
-                entry = {"model": o["model"], "text": r.get("text", "")}
-                if r.get("quote"):
-                    entry["quote"] = r["quote"]
-                (good if r.get("correct") else bad).append(entry)
-        automatic_outputs[lang] = {"full_text": full_text.get(lang, ""), "good": good, "bad": bad}
+                (good_texts if r.get("correct") else bad_texts).append(r.get("text", ""))
+        pool = good_texts + bad_texts
+        base_text = max(pool, key=len) if pool else full_text.get(lang, "")
+        automatic_texts[lang] = base_text
+        targets.extend(build_lang_targets(lang, base_text, cluster))
+
+    gi = cluster[0]["golden_segment_index"]
+    doc_id = f"{file_id}__gi{gi}__w{word_range[0]}-{word_range[1]}"
 
     return {
+        # --- annotations.jsonl schema fields (see README.md) ---
+        "doc_id": doc_id,
+        "filename": f"{file_id}.mp3",
+        "segment": gi,
+        "orig_start": start_time,
+        "orig_end": end_time,
+        "gold_transcript": golden_transcript,
+        "asr": automatic_texts.get("en"),
+        "targets": targets,
+        # --- extra fields (README: "Other fields are optional") ---
         "source_file": source_file,
         "id": file_id,
-        "golden_segment_index": cluster[0]["golden_segment_index"],
+        "golden_segment_index": gi,
         "golden_word_range": list(word_range),
-        "start": start_time,
-        "end": end_time,
-        "golden_transcript": golden_transcript,
         "num_models_reporting": len(models_reporting),
         "models_reporting": models_reporting,
-        "explanations": explanations,
-        "automatic_outputs": automatic_outputs,
+        "automatic_texts": automatic_texts,
     }
 
 
@@ -423,7 +527,13 @@ def merge_file(
     for cluster in cluster_occurrences(all_occurrences):
         gi = cluster[0]["golden_segment_index"]
         gdata = golden_data[gi]
-        items.append(build_item(str(roughaligned_path), file_id, gdata, cluster))
+        item = build_item(str(roughaligned_path), file_id, gdata, cluster)
+        if not item["targets"]:
+            # Every cluster originates from a reported error, but if none of
+            # its renderings were confidently marked "incorrect" for any
+            # language, there is nothing to put in targets[] -- skip.
+            continue
+        items.append(item)
     return items
 
 
@@ -432,60 +542,58 @@ def merge_file(
 # ---------------------------------------------------------------------------
 
 
-def write_json(items: list[dict], out_path: Path) -> None:
+def write_jsonl(items: list[dict], out_path: Path) -> None:
     tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
     with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+        for it in items:
+            f.write(json.dumps(it, ensure_ascii=False))
+            f.write("\n")
     tmp_path.replace(out_path)
 
 
 def write_csv(items: list[dict], out_path: Path) -> None:
+    """Flat summary, one row per target (per flagged language/rendering)."""
     tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
     with open(tmp_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
             [
-                "source_file",
-                "id",
-                "start",
-                "end",
+                "doc_id",
+                "filename",
+                "orig_start",
+                "orig_end",
                 "num_models_reporting",
                 "models_reporting",
-                "golden_transcript",
-                "explanations",
-                "en_bad",
-                "de_bad",
-                "cs_bad",
-                "pl_bad",
-                "sk_bad",
+                "gold_transcript",
+                "tgt_lan",
+                "system",
+                "span",
+                "intended",
+                "confidence",
+                "error_source",
+                "explanation",
             ]
         )
         for it in items:
-            explanations = " | ".join(
-                f"[{e['model']}] {e['error_class']}: {e['source_words']} -- {e['explanation']}"
-                for e in it["explanations"]
-            )
-            bad_by_lang = {
-                lang: "; ".join(f"[{b['model']}] {b['text']}" for b in it["automatic_outputs"].get(lang, {}).get("bad", []))
-                for lang in TARGET_AUTOMATIC_LANGS
-            }
-            writer.writerow(
-                [
-                    it["source_file"],
-                    it["id"],
-                    it["start"],
-                    it["end"],
-                    it["num_models_reporting"],
-                    ",".join(it["models_reporting"]),
-                    it["golden_transcript"],
-                    explanations,
-                    bad_by_lang.get("en", ""),
-                    bad_by_lang.get("de", ""),
-                    bad_by_lang.get("cs", ""),
-                    bad_by_lang.get("pl", ""),
-                    bad_by_lang.get("sk", ""),
-                ]
-            )
+            for t in it["targets"]:
+                writer.writerow(
+                    [
+                        it["doc_id"],
+                        it["filename"],
+                        it["orig_start"],
+                        it["orig_end"],
+                        it["num_models_reporting"],
+                        ",".join(it["models_reporting"]),
+                        it["gold_transcript"],
+                        t["tgt_lan"],
+                        t["system"],
+                        t["span"],
+                        t["intended"],
+                        t["confidence"],
+                        t["error_source"],
+                        t["explanation"],
+                    ]
+                )
     tmp_path.replace(out_path)
 
 
@@ -495,8 +603,8 @@ def main() -> None:
     )
     parser.add_argument("--roughaligned-dir", default=str(SCRIPT_DIR / "roughaligned"))
     parser.add_argument("--divergencies-dir", default=str(SCRIPT_DIR / "02-divergencies-by-claude"))
-    parser.add_argument("--output", default=str(SCRIPT_DIR / "merged_errors.json"))
-    parser.add_argument("--csv-output", default=str(SCRIPT_DIR / "merged_errors.csv"))
+    parser.add_argument("--output", default=str(SCRIPT_DIR / "35-merged-annotations.jsonl"))
+    parser.add_argument("--csv-output", default=str(SCRIPT_DIR / "35-merged-annotations.csv"))
     parser.add_argument(
         "--min-models",
         type=int,
@@ -531,13 +639,13 @@ def main() -> None:
 
     all_items.sort(key=lambda it: (-it["num_models_reporting"], it["source_file"], it["golden_word_range"][0]))
 
-    write_json(all_items, Path(args.output))
+    write_jsonl(all_items, Path(args.output))
     write_csv(all_items, Path(args.csv_output))
 
     print("=" * 72)
     print(f"Done: {len(all_items)} merged error item(s) from {len(stem_to_outputs)} file(s).")
-    print(f"JSON: {args.output}")
-    print(f"CSV:  {args.csv_output}")
+    print(f"JSONL: {args.output}")
+    print(f"CSV:   {args.csv_output}")
 
 
 if __name__ == "__main__":
