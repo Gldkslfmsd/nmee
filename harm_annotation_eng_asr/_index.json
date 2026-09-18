@@ -1,0 +1,2032 @@
+[
+ {
+  "clip_id": "423057182_1193.80_1790.84",
+  "company": "The Greenbrier Companies, Inc.",
+  "file": "423057182_1193.80_1790.84.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "424450398_2433.56_3031.72",
+  "company": "McCormick & Company, Incorporated",
+  "file": "424450398_2433.56_3031.72.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "424466223_1202.44_1801.72",
+  "company": "Valley National Bancorp",
+  "file": "424466223_1202.44_1801.72.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "425220019_2393.64_2990.76",
+  "company": "PotlatchDeltic Corporation",
+  "file": "425220019_2393.64_2990.76.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "425344040_2389.56_2981.48",
+  "company": "Corning Incorporated",
+  "file": "425344040_2389.56_2981.48.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "425392656_2395.80_2793.66",
+  "company": "Las Vegas Sands Corp.",
+  "file": "425392656_2395.80_2793.66.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "425471463_2395.96_2996.36",
+  "company": "Whirlpool Corporation",
+  "file": "425471463_2395.96_2996.36.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "425475241_2423.72_3023.24",
+  "company": "The Cigna Group",
+  "file": "425475241_2423.72_3023.24.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "425489402_601.24_1201.08",
+  "company": "Waste Management, Inc.",
+  "file": "425489402_601.24_1201.08.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "425489896_2398.36_2997.40",
+  "company": "Schneider National, Inc.",
+  "file": "425489896_2398.36_2997.40.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "425490961_0.68_599.48",
+  "company": "SunCoke Energy, Inc.",
+  "file": "425490961_0.68_599.48.jsonl",
+  "segments_with_errors": 16,
+  "errors": 18
+ },
+ {
+  "clip_id": "425494771_2398.68_2998.76",
+  "company": "Tetra Tech, Inc.",
+  "file": "425494771_2398.68_2998.76.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "425503702_2449.88_3047.00",
+  "company": "Southwest Airlines Co.",
+  "file": "425503702_2449.88_3047.00.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "425537679_42.60_642.68",
+  "company": "SkyWest, Inc.",
+  "file": "425537679_42.60_642.68.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "426101537_2436.84_3032.12",
+  "company": "Saia, Inc.",
+  "file": "426101537_2436.84_3032.12.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "426275080_2393.56_2735.65",
+  "company": "The Marzetti Company",
+  "file": "426275080_2393.56_2735.65.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "426318787_1.40_594.84",
+  "company": "H&R Block, Inc.",
+  "file": "426318787_1.40_594.84.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "426320377_2396.28_2995.32",
+  "company": "Alphabet Inc.",
+  "file": "426320377_2396.28_2995.32.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "426392774_18.60_613.00",
+  "company": "Twin Disc, Incorporated",
+  "file": "426392774_18.60_613.00.jsonl",
+  "segments_with_errors": 13,
+  "errors": 15
+ },
+ {
+  "clip_id": "426442468_0.84_599.90",
+  "company": "TTM Technologies, Inc.",
+  "file": "426442468_0.84_599.90.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "426511863_2376.12_2972.20",
+  "company": "Molina Healthcare, Inc.",
+  "file": "426511863_2376.12_2972.20.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "426517199_2397.24_2996.92",
+  "company": "Linde Public Limited Company",
+  "file": "426517199_2397.24_2996.92.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "426520005_601.96_1200.52",
+  "company": "Philip Morris International Inc.",
+  "file": "426520005_601.96_1200.52.jsonl",
+  "segments_with_errors": 15,
+  "errors": 16
+ },
+ {
+  "clip_id": "426520355_1.16_600.04",
+  "company": "Magnera Corporation",
+  "file": "426520355_1.16_600.04.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "426521130_0.76_599.56",
+  "company": "U-Haul Holding Company",
+  "file": "426521130_0.76_599.56.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "426559771_1209.08_1804.12",
+  "company": "Sonos, Inc.",
+  "file": "426559771_1209.08_1804.12.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "426564735_1.08_599.98",
+  "company": "Starz Entertainment Corp.",
+  "file": "426564735_1.08_599.98.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "426639743_2423.16_2799.08",
+  "company": "Plains GP Holdings, L.P.",
+  "file": "426639743_2423.16_2799.08.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "426881365_2433.88_3030.70",
+  "company": "ON Semiconductor Corporation",
+  "file": "426881365_2433.88_3030.70.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "426926181_2420.76_3018.12",
+  "company": "Inspire Medical Systems, Inc.",
+  "file": "426926181_2420.76_3018.12.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "426994757_2391.96_2989.56",
+  "company": "GLOBALFOUNDRIES Inc.",
+  "file": "426994757_2391.96_2989.56.jsonl",
+  "segments_with_errors": 12,
+  "errors": 13
+ },
+ {
+  "clip_id": "426995861_2396.60_2992.84",
+  "company": "Axcelis Technologies, Inc.",
+  "file": "426995861_2396.60_2992.84.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "426999905_1200.92_1800.52",
+  "company": "Sunoco LP",
+  "file": "426999905_1200.92_1800.52.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "427001597_2393.08_2864.14",
+  "company": "Brixmor Property Group Inc.",
+  "file": "427001597_2393.08_2864.14.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "427125254_40.60_637.56",
+  "company": "Pyxus International, Inc.",
+  "file": "427125254_40.60_637.56.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "427220698_2399.72_2998.20",
+  "company": "CEVA, Inc.",
+  "file": "427220698_2399.72_2998.20.jsonl",
+  "segments_with_errors": 19,
+  "errors": 20
+ },
+ {
+  "clip_id": "427314103_108.68_707.18",
+  "company": "AMC Networks Inc.",
+  "file": "427314103_108.68_707.18.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "427324287_2397.24_2948.60",
+  "company": "American Axle & Manufacturing Holdings, Inc.",
+  "file": "427324287_2397.24_2948.60.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "427325194_2.68_600.46",
+  "company": "Marcus & Millichap, Inc.",
+  "file": "427325194_2.68_600.46.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "427459515_14.36_614.60",
+  "company": "JELD-WEN Holding, Inc.",
+  "file": "427459515_14.36_614.60.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "427526510_0.28_597.02",
+  "company": "The Andersons, Inc.",
+  "file": "427526510_0.28_597.02.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "427532391_2393.96_2988.28",
+  "company": "Materion Corporation",
+  "file": "427532391_2393.96_2988.28.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "427602277_2389.64_2805.16",
+  "company": "Orion S.A.",
+  "file": "427602277_2389.64_2805.16.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "427605836_651.32_1249.74",
+  "company": "Upbound Group, Inc.",
+  "file": "427605836_651.32_1249.74.jsonl",
+  "segments_with_errors": 24,
+  "errors": 27
+ },
+ {
+  "clip_id": "427639776_0.00_598.28",
+  "company": "CS Disco, Inc.",
+  "file": "427639776_0.00_598.28.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "427641270_2413.16_3013.40",
+  "company": "Ryan Specialty Holdings, Inc.",
+  "file": "427641270_2413.16_3013.40.jsonl",
+  "segments_with_errors": 8,
+  "errors": 9
+ },
+ {
+  "clip_id": "427786849_2379.48_2977.88",
+  "company": "Clearway Energy, Inc.",
+  "file": "427786849_2379.48_2977.88.jsonl",
+  "segments_with_errors": 4,
+  "errors": 5
+ },
+ {
+  "clip_id": "427822467_2386.28_2689.65",
+  "company": "Krispy Kreme, Inc.",
+  "file": "427822467_2386.28_2689.65.jsonl",
+  "segments_with_errors": 0,
+  "errors": 0
+ },
+ {
+  "clip_id": "427855385_1198.52_1797.32",
+  "company": "SES AI Corporation",
+  "file": "427855385_1198.52_1797.32.jsonl",
+  "segments_with_errors": 6,
+  "errors": 8
+ },
+ {
+  "clip_id": "427898080_1207.80_1805.00",
+  "company": "Atlanta Braves Holdings, Inc.",
+  "file": "427898080_1207.80_1805.00.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "427904056_2402.76_3000.12",
+  "company": "The TJX Companies, Inc.",
+  "file": "427904056_2402.76_3000.12.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "427959790_2436.68_3035.48",
+  "company": "Cars.com Inc.",
+  "file": "427959790_2436.68_3035.48.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "428064605_0.84_599.42",
+  "company": "Opendoor Technologies Inc.",
+  "file": "428064605_0.84_599.42.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "428070605_2389.32_2987.40",
+  "company": "Cable One, Inc.",
+  "file": "428070605_2389.32_2987.40.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "428076867_2397.24_2997.40",
+  "company": "Astrana Health, Inc.",
+  "file": "428076867_2397.24_2997.40.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "428204627_1.16_597.08",
+  "company": "Global Medical REIT Inc.",
+  "file": "428204627_1.16_597.08.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "428722878_0.68_596.84",
+  "company": "ChargePoint Holdings, Inc.",
+  "file": "428722878_0.68_596.84.jsonl",
+  "segments_with_errors": 4,
+  "errors": 6
+ },
+ {
+  "clip_id": "428868927_2420.36_3014.70",
+  "company": "FRP Holdings, Inc.",
+  "file": "428868927_2420.36_3014.70.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "428872906_2393.40_2989.08",
+  "company": "John Wiley & Sons, Inc.",
+  "file": "428872906_2393.40_2989.08.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "428895453_1211.40_1512.86",
+  "company": "Xtant Medical Holdings, Inc.",
+  "file": "428895453_1211.40_1512.86.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "428898131_2479.32_3075.56",
+  "company": "The Gap, Inc.",
+  "file": "428898131_2479.32_3075.56.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "429422074_2398.76_2998.04",
+  "company": "Ciena Corporation",
+  "file": "429422074_2398.76_2998.04.jsonl",
+  "segments_with_errors": 10,
+  "errors": 11
+ },
+ {
+  "clip_id": "429493549_1.00_600.28",
+  "company": "Vivid Seats Inc.",
+  "file": "429493549_1.00_600.28.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "429570526_23.40_619.72",
+  "company": "Lifetime Brands, Inc.",
+  "file": "429570526_23.40_619.72.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "429592252_11.72_611.80",
+  "company": "Shimmick Corporation",
+  "file": "429592252_11.72_611.80.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "429724796_1196.60_1796.84",
+  "company": "Sangamo Therapeutics, Inc.",
+  "file": "429724796_1196.60_1796.84.jsonl",
+  "segments_with_errors": 14,
+  "errors": 16
+ },
+ {
+  "clip_id": "429839666_1319.08_1749.32",
+  "company": "Charlotte's Web Holdings, Inc.",
+  "file": "429839666_1319.08_1749.32.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "430053685_633.32_1231.64",
+  "company": "Oklo Inc.",
+  "file": "430053685_633.32_1231.64.jsonl",
+  "segments_with_errors": 20,
+  "errors": 23
+ },
+ {
+  "clip_id": "430087086_1194.20_1794.44",
+  "company": "Enerpac Tool Group Corp.",
+  "file": "430087086_1194.20_1794.44.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "430193953_1198.60_1754.76",
+  "company": "Guardian Pharmacy Services, Inc.",
+  "file": "430193953_1198.60_1754.76.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "430238234_2437.88_2955.98",
+  "company": "H.B. Fuller Company",
+  "file": "430238234_2437.88_2955.98.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "430260927_38.20_638.36",
+  "company": "Dolphin Entertainment, Inc.",
+  "file": "430260927_38.20_638.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "430261771_1346.68_1946.36",
+  "company": "Intermap Technologies Corporation",
+  "file": "430261771_1346.68_1946.36.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "430437660_164.68_762.04",
+  "company": "ASP Isotopes Inc.",
+  "file": "430437660_164.68_762.04.jsonl",
+  "segments_with_errors": 21,
+  "errors": 25
+ },
+ {
+  "clip_id": "431222065_2426.60_2808.78",
+  "company": "Prologis, Inc.",
+  "file": "431222065_2426.60_2808.78.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "431399296_2406.68_3005.24",
+  "company": "Northrop Grumman Corporation",
+  "file": "431399296_2406.68_3005.24.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "431401149_1201.56_1801.48",
+  "company": "Old National Bancorp",
+  "file": "431401149_1201.56_1801.48.jsonl",
+  "segments_with_errors": 10,
+  "errors": 11
+ },
+ {
+  "clip_id": "431464443_2397.80_2996.52",
+  "company": "Otis Worldwide Corporation",
+  "file": "431464443_2397.80_2996.52.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "431501082_2408.92_3004.30",
+  "company": "Robert Half Inc.",
+  "file": "431501082_2408.92_3004.30.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "431661420_2389.88_2945.74",
+  "company": "Rollins, Inc.",
+  "file": "431661420_2389.88_2945.74.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "431671567_24.60_620.36",
+  "company": "Balchem Corporation",
+  "file": "431671567_24.60_620.36.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "431700084_44.28_640.06",
+  "company": "Socket Mobile, Inc.",
+  "file": "431700084_44.28_640.06.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "431704177_2428.52_2735.40",
+  "company": "The Boston Beer Company, Inc.",
+  "file": "431704177_2428.52_2735.40.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "431904970_0.36_599.24",
+  "company": "Carter's, Inc.",
+  "file": "431904970_0.36_599.24.jsonl",
+  "segments_with_errors": 3,
+  "errors": 4
+ },
+ {
+  "clip_id": "432080080_2431.56_3030.12",
+  "company": "Zebra Technologies Corporation",
+  "file": "432080080_2431.56_3030.12.jsonl",
+  "segments_with_errors": 3,
+  "errors": 5
+ },
+ {
+  "clip_id": "432080198_2395.32_2992.68",
+  "company": "NeoGenomics, Inc.",
+  "file": "432080198_2395.32_2992.68.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "432087660_2397.72_2995.80",
+  "company": "Armstrong World Industries, Inc.",
+  "file": "432087660_2397.72_2995.80.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432089690_112.84_708.68",
+  "company": "Travelzoo",
+  "file": "432089690_112.84_708.68.jsonl",
+  "segments_with_errors": 13,
+  "errors": 14
+ },
+ {
+  "clip_id": "432154881_2402.20_2942.86",
+  "company": "Gibraltar Industries, Inc.",
+  "file": "432154881_2402.20_2942.86.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432188055_1194.20_1792.12",
+  "company": "Netgear, Inc.",
+  "file": "432188055_1194.20_1792.12.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "432215296_2443.16_3042.36",
+  "company": "Kirby Corporation",
+  "file": "432215296_2443.16_3042.36.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432216041_2382.12_2982.28",
+  "company": "AMETEK, Inc.",
+  "file": "432216041_2382.12_2982.28.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432220645_1198.68_1798.60",
+  "company": "MYR Group Inc.",
+  "file": "432220645_1198.68_1798.60.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "432221247_0.44_598.04",
+  "company": "Rush Enterprises, Inc.",
+  "file": "432221247_0.44_598.04.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "432225840_1.72_600.28",
+  "company": "Ecovyst Inc.",
+  "file": "432225840_1.72_600.28.jsonl",
+  "segments_with_errors": 10,
+  "errors": 11
+ },
+ {
+  "clip_id": "432226090_2395.96_2822.36",
+  "company": "Invitation Homes Inc.",
+  "file": "432226090_2395.96_2822.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432226145_1230.04_1828.20",
+  "company": "Granite Construction Incorporated",
+  "file": "432226145_1230.04_1828.20.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "432246306_2397.72_2991.88",
+  "company": "Motorola Solutions, Inc.",
+  "file": "432246306_2397.72_2991.88.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "432246475_2425.88_3025.34",
+  "company": "Apple Inc.",
+  "file": "432246475_2425.88_3025.34.jsonl",
+  "segments_with_errors": 14,
+  "errors": 14
+ },
+ {
+  "clip_id": "432276136_2393.72_2992.20",
+  "company": "Terex Corporation",
+  "file": "432276136_2393.72_2992.20.jsonl",
+  "segments_with_errors": 15,
+  "errors": 15
+ },
+ {
+  "clip_id": "432277794_93.32_691.24",
+  "company": "Cooper-Standard Holdings Inc.",
+  "file": "432277794_93.32_691.24.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "432278963_2397.72_2996.68",
+  "company": "AptarGroup, Inc.",
+  "file": "432278963_2397.72_2996.68.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "432280012_38.28_633.18",
+  "company": "AdvanSix Inc.",
+  "file": "432280012_38.28_633.18.jsonl",
+  "segments_with_errors": 7,
+  "errors": 8
+ },
+ {
+  "clip_id": "432354621_0.12_599.58",
+  "company": "JBT Marel Corporation",
+  "file": "432354621_0.12_599.58.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432409797_2403.32_3001.08",
+  "company": "DoorDash, Inc.",
+  "file": "432409797_2403.32_3001.08.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432409877_1265.08_1836.28",
+  "company": "Ranpak Holdings Corp.",
+  "file": "432409877_1265.08_1836.28.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432409896_2393.80_2993.56",
+  "company": "First Watch Restaurant Group, Inc.",
+  "file": "432409896_2393.80_2993.56.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432412953_2387.48_2985.32",
+  "company": "LCI Industries",
+  "file": "432412953_2387.48_2985.32.jsonl",
+  "segments_with_errors": 6,
+  "errors": 8
+ },
+ {
+  "clip_id": "432445639_2436.84_2802.06",
+  "company": "MasterBrand, Inc.",
+  "file": "432445639_2436.84_2802.06.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "432447514_1.48_599.32",
+  "company": "Corsair Gaming, Inc.",
+  "file": "432447514_1.48_599.32.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432448149_2385.00_2984.44",
+  "company": "Super Micro Computer, Inc.",
+  "file": "432448149_2385.00_2984.44.jsonl",
+  "segments_with_errors": 12,
+  "errors": 13
+ },
+ {
+  "clip_id": "432485773_2440.28_3035.24",
+  "company": "Flex Ltd.",
+  "file": "432485773_2440.28_3035.24.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "432488661_2391.48_2728.22",
+  "company": "Sabre Corporation",
+  "file": "432488661_2391.48_2728.22.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "432490247_2399.88_2997.96",
+  "company": "Brookdale Senior Living Inc.",
+  "file": "432490247_2399.88_2997.96.jsonl",
+  "segments_with_errors": 8,
+  "errors": 9
+ },
+ {
+  "clip_id": "432497909_1199.32_1797.98",
+  "company": "HNI Corporation",
+  "file": "432497909_1199.32_1797.98.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "432501907_1200.52_1795.64",
+  "company": "The Pennant Group, Inc.",
+  "file": "432501907_1200.52_1795.64.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "432523417_1202.04_1800.60",
+  "company": "Proficient Auto Logistics, Inc.",
+  "file": "432523417_1202.04_1800.60.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "432532929_1245.64_1666.92",
+  "company": "REC Silicon ASA",
+  "file": "432532929_1245.64_1666.92.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "432553245_2447.48_3046.12",
+  "company": "NCR Voyix Corporation",
+  "file": "432553245_2447.48_3046.12.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "432553781_2388.52_2975.96",
+  "company": "Somnigroup International Inc.",
+  "file": "432553781_2388.52_2975.96.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432566274_0.44_595.80",
+  "company": "Stratasys Ltd.",
+  "file": "432566274_0.44_595.80.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "432569400_1200.60_1793.16",
+  "company": "Sila Realty Trust, Inc.",
+  "file": "432569400_1200.60_1793.16.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "432573437_1193.96_1794.20",
+  "company": "Stagwell Inc.",
+  "file": "432573437_1193.96_1794.20.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "432590744_2.52_599.50",
+  "company": "Natural Grocers by Vitamin Cottage, Inc.",
+  "file": "432590744_2.52_599.50.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "432593576_2393.24_2773.72",
+  "company": "Arlo Technologies, Inc.",
+  "file": "432593576_2393.24_2773.72.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "432593924_2398.44_2780.20",
+  "company": "Lyft, Inc.",
+  "file": "432593924_2398.44_2780.20.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "432646641_3.72_601.50",
+  "company": "Tomi Environmental Solutions, Inc.",
+  "file": "432646641_3.72_601.50.jsonl",
+  "segments_with_errors": 11,
+  "errors": 13
+ },
+ {
+  "clip_id": "432715609_2403.24_3000.44",
+  "company": "RadNet, Inc.",
+  "file": "432715609_2403.24_3000.44.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "432790779_1208.76_1804.36",
+  "company": "Broadwind, Inc.",
+  "file": "432790779_1208.76_1804.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "432864953_105.96_704.14",
+  "company": "Flyexclusive, Inc.",
+  "file": "432864953_105.96_704.14.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "432884508_0.00_599.50",
+  "company": "CytoSorbents Corporation",
+  "file": "432884508_0.00_599.50.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "432918462_53.56_652.38",
+  "company": "Edible Garden AG Incorporated",
+  "file": "432918462_53.56_652.38.jsonl",
+  "segments_with_errors": 11,
+  "errors": 13
+ },
+ {
+  "clip_id": "432965309_2631.64_2951.32",
+  "company": "Alliance Entertainment Holding Corporation",
+  "file": "432965309_2631.64_2951.32.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "432965659_59.32_659.24",
+  "company": "Nuvve Holding Corp.",
+  "file": "432965659_59.32_659.24.jsonl",
+  "segments_with_errors": 14,
+  "errors": 14
+ },
+ {
+  "clip_id": "433001856_53.40_645.16",
+  "company": "Wrap Technologies, Inc.",
+  "file": "433001856_53.40_645.16.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "433002965_1191.08_1499.34",
+  "company": "Stran & Company, Inc.",
+  "file": "433002965_1191.08_1499.34.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "433180047_2398.68_2935.07",
+  "company": "Keysight Technologies, Inc.",
+  "file": "433180047_2398.68_2935.07.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "434061966_2392.84_2992.44",
+  "company": "Ollie's Bargain Outlet Holdings, Inc.",
+  "file": "434061966_2392.84_2992.44.jsonl",
+  "segments_with_errors": 12,
+  "errors": 13
+ },
+ {
+  "clip_id": "434232654_1232.44_1796.04",
+  "company": "Mission Produce, Inc.",
+  "file": "434232654_1232.44_1796.04.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "434233747_2421.56_3019.40",
+  "company": "Vail Resorts, Inc.",
+  "file": "434233747_2421.56_3019.40.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "435547034_332.36_929.88",
+  "company": "American Outdoor Brands, Inc.",
+  "file": "435547034_332.36_929.88.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "436131913_88.92_684.44",
+  "company": "Northern Technologies International Corporation",
+  "file": "436131913_88.92_684.44.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "437161957_2404.04_3002.36",
+  "company": "Mohawk Industries, Inc.",
+  "file": "437161957_2404.04_3002.36.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437298413_1.08_601.48",
+  "company": "CBRE Group, Inc.",
+  "file": "437298413_1.08_601.48.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "437308334_13.32_612.04",
+  "company": "NexPoint Residential Trust, Inc.",
+  "file": "437308334_13.32_612.04.jsonl",
+  "segments_with_errors": 16,
+  "errors": 18
+ },
+ {
+  "clip_id": "437328583_1234.12_1833.82",
+  "company": "Mondelez International, Inc.",
+  "file": "437328583_1234.12_1833.82.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "437362344_2398.68_2995.16",
+  "company": "Virtu Financial, Inc.",
+  "file": "437362344_2398.68_2995.16.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "437363084_75.32_674.76",
+  "company": "Luxfer Holdings PLC",
+  "file": "437363084_75.32_674.76.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437364355_2403.64_3002.52",
+  "company": "Thryv Holdings, Inc.",
+  "file": "437364355_2403.64_3002.52.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "437364561_2397.88_2994.76",
+  "company": "Avis Budget Group, Inc.",
+  "file": "437364561_2397.88_2994.76.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437367156_2392.60_2992.36",
+  "company": "Clean Harbors, Inc.",
+  "file": "437367156_2392.60_2992.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "437367305_2409.32_3009.24",
+  "company": "PPG Industries, Inc.",
+  "file": "437367305_2409.32_3009.24.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "437394246_1197.16_1779.66",
+  "company": "FAT Brands Inc.",
+  "file": "437394246_1197.16_1779.66.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437397841_2396.12_2995.08",
+  "company": "eBay Inc.",
+  "file": "437397841_2396.12_2995.08.jsonl",
+  "segments_with_errors": 13,
+  "errors": 15
+ },
+ {
+  "clip_id": "437441931_2394.44_2988.92",
+  "company": "DT Midstream, Inc.",
+  "file": "437441931_2394.44_2988.92.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437443840_1.16_596.36",
+  "company": "Custom Truck One Source, Inc.",
+  "file": "437443840_1.16_596.36.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "437443997_1225.48_1825.08",
+  "company": "InterDigital, Inc.",
+  "file": "437443997_1225.48_1825.08.jsonl",
+  "segments_with_errors": 11,
+  "errors": 13
+ },
+ {
+  "clip_id": "437445132_2401.80_2999.88",
+  "company": "EZCORP, Inc.",
+  "file": "437445132_2401.80_2999.88.jsonl",
+  "segments_with_errors": 4,
+  "errors": 5
+ },
+ {
+  "clip_id": "437446177_0.84_597.16",
+  "company": "Utz Brands, Inc.",
+  "file": "437446177_0.84_597.16.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "437449500_33.56_627.58",
+  "company": "Vulcan Materials Company",
+  "file": "437449500_33.56_627.58.jsonl",
+  "segments_with_errors": 4,
+  "errors": 5
+ },
+ {
+  "clip_id": "437468079_1.48_595.72",
+  "company": "Matson, Inc.",
+  "file": "437468079_1.48_595.72.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "437468473_0.28_593.32",
+  "company": "AppFolio, Inc.",
+  "file": "437468473_0.28_593.32.jsonl",
+  "segments_with_errors": 7,
+  "errors": 8
+ },
+ {
+  "clip_id": "437468498_1.56_599.72",
+  "company": "Savers Value Village, Inc.",
+  "file": "437468498_1.56_599.72.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "437501553_2397.24_2995.24",
+  "company": "Ingersoll Rand Inc.",
+  "file": "437501553_2397.24_2995.24.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "437502237_9.32_608.70",
+  "company": "Leggett & Platt, Incorporated",
+  "file": "437502237_9.32_608.70.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "437512169_0.52_595.64",
+  "company": "The Marcus Corporation",
+  "file": "437512169_0.52_595.64.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437570237_2394.60_2993.08",
+  "company": "Freshpet, Inc.",
+  "file": "437570237_2394.60_2993.08.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437632775_4.28_602.62",
+  "company": "Hillman Solutions Corp.",
+  "file": "437632775_4.28_602.62.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437632894_2408.20_2846.78",
+  "company": "UL Solutions Inc.",
+  "file": "437632894_2408.20_2846.78.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437638177_0.60_600.44",
+  "company": "Reservoir Media, Inc.",
+  "file": "437638177_0.60_600.44.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "437640794_1.08_600.92",
+  "company": "ADTRAN Holdings, Inc.",
+  "file": "437640794_1.08_600.92.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437649386_2425.32_3024.20",
+  "company": "National Storage Affiliates Trust",
+  "file": "437649386_2425.32_3024.20.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437658982_83.16_682.84",
+  "company": "Innovate Corp.",
+  "file": "437658982_83.16_682.84.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "437660322_2445.96_3044.84",
+  "company": "The ONE Group Hospitality, Inc.",
+  "file": "437660322_2445.96_3044.84.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "437660558_2394.52_2994.76",
+  "company": "Teradata Corporation",
+  "file": "437660558_2394.52_2994.76.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "437661022_0.04_599.40",
+  "company": "LifeMD, Inc.",
+  "file": "437661022_0.04_599.40.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "437661541_3.00_601.88",
+  "company": "News Corporation",
+  "file": "437661541_3.00_601.88.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "437696940_598.36_1197.98",
+  "company": "Arvinas, Inc.",
+  "file": "437696940_598.36_1197.98.jsonl",
+  "segments_with_errors": 14,
+  "errors": 16
+ },
+ {
+  "clip_id": "437697171_2406.44_3002.68",
+  "company": "Cencora, Inc.",
+  "file": "437697171_2406.44_3002.68.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437698016_2396.12_2994.36",
+  "company": "Rockwell Automation, Inc.",
+  "file": "437698016_2396.12_2994.36.jsonl",
+  "segments_with_errors": 4,
+  "errors": 5
+ },
+ {
+  "clip_id": "437698430_45.00_641.64",
+  "company": "The Brink's Company",
+  "file": "437698430_45.00_641.64.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "437699012_2394.60_2709.68",
+  "company": "Vishay Intertechnology, Inc.",
+  "file": "437699012_2394.60_2709.68.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437708795_2411.56_3011.00",
+  "company": "Hyster-Yale, Inc.",
+  "file": "437708795_2411.56_3011.00.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437726491_1297.08_1716.30",
+  "company": "GEN Restaurant Group, Inc.",
+  "file": "437726491_1297.08_1716.30.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "437727052_17.64_616.84",
+  "company": "Cardlytics, Inc.",
+  "file": "437727052_17.64_616.84.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437760326_2452.36_3051.18",
+  "company": "Talen Energy Corporation",
+  "file": "437760326_2452.36_3051.18.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437761222_2395.08_2994.76",
+  "company": "EPAM Systems, Inc.",
+  "file": "437761222_2395.08_2994.76.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437761287_1241.80_1760.84",
+  "company": "Acushnet Holdings Corp.",
+  "file": "437761287_1241.80_1760.84.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437764330_2391.24_2990.76",
+  "company": "Arhaus, Inc.",
+  "file": "437764330_2391.24_2990.76.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437767257_56.76_655.40",
+  "company": "Global Partners LP",
+  "file": "437767257_56.76_655.40.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437773785_57.32_656.60",
+  "company": "The Dixie Group, Inc.",
+  "file": "437773785_57.32_656.60.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "437778038_12.92_611.00",
+  "company": "Innovative Industrial Properties, Inc.",
+  "file": "437778038_12.92_611.00.jsonl",
+  "segments_with_errors": 11,
+  "errors": 12
+ },
+ {
+  "clip_id": "437787268_2437.16_3019.74",
+  "company": "NACCO Industries, Inc.",
+  "file": "437787268_2437.16_3019.74.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "437792706_1215.16_1813.32",
+  "company": "Trupanion, Inc.",
+  "file": "437792706_1215.16_1813.32.jsonl",
+  "segments_with_errors": 14,
+  "errors": 14
+ },
+ {
+  "clip_id": "437793937_2422.84_3022.92",
+  "company": "Xponential Fitness, Inc.",
+  "file": "437793937_2422.84_3022.92.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "437794337_0.60_600.04",
+  "company": "Century Aluminum Company",
+  "file": "437794337_0.60_600.04.jsonl",
+  "segments_with_errors": 7,
+  "errors": 8
+ },
+ {
+  "clip_id": "437794642_2431.56_3021.48",
+  "company": "The Joint Corp.",
+  "file": "437794642_2431.56_3021.48.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437795822_18.20_618.44",
+  "company": "BGSF, INC.",
+  "file": "437795822_18.20_618.44.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "437799103_1198.04_1796.68",
+  "company": "FiscalNote Holdings, Inc.",
+  "file": "437799103_1198.04_1796.68.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "437825706_0.84_599.74",
+  "company": "FuboTV Inc.",
+  "file": "437825706_0.84_599.74.jsonl",
+  "segments_with_errors": 12,
+  "errors": 12
+ },
+ {
+  "clip_id": "437838188_1203.08_1743.90",
+  "company": "Granite Ridge Resources, Inc.",
+  "file": "437838188_1203.08_1743.90.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "437918316_2420.52_2824.68",
+  "company": "RCI Hospitality Holdings, Inc.",
+  "file": "437918316_2420.52_2824.68.jsonl",
+  "segments_with_errors": 4,
+  "errors": 5
+ },
+ {
+  "clip_id": "437918492_1.72_598.76",
+  "company": "Exodus Movement, Inc.",
+  "file": "437918492_1.72_598.76.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437956387_2387.16_2977.88",
+  "company": "Smithfield Foods Inc.",
+  "file": "437956387_2387.16_2977.88.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "437980863_1197.32_1795.00",
+  "company": "SKYX Platforms Corp.",
+  "file": "437980863_1197.32_1795.00.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "437980890_1199.16_1619.64",
+  "company": "Vicarious Surgical Inc.",
+  "file": "437980890_1199.16_1619.64.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "438013337_2384.92_2984.70",
+  "company": "Nexteer Automotive Group Limited",
+  "file": "438013337_2384.92_2984.70.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "438019730_1212.36_1763.02",
+  "company": "Madison Square Garden Entertainment Corp.",
+  "file": "438019730_1212.36_1763.02.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "438027029_1204.44_1759.56",
+  "company": "PodcastOne, Inc.",
+  "file": "438027029_1204.44_1759.56.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "438042534_0.20_598.92",
+  "company": "Expion360 Inc",
+  "file": "438042534_0.20_598.92.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "438074260_2398.12_2996.36",
+  "company": "Tapestry, Inc.",
+  "file": "438074260_2398.12_2996.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "438076786_0.36_594.44",
+  "company": "Xcel Brands, Inc.",
+  "file": "438076786_0.36_594.44.jsonl",
+  "segments_with_errors": 11,
+  "errors": 12
+ },
+ {
+  "clip_id": "438107324_2403.64_3001.32",
+  "company": "Cibus, Inc.",
+  "file": "438107324_2403.64_3001.32.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "438107848_1198.44_1798.52",
+  "company": "Blaize Holdings, Inc.",
+  "file": "438107848_1198.44_1798.52.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "438108546_22.84_617.24",
+  "company": "Republic Airways Holdings Inc",
+  "file": "438108546_22.84_617.24.jsonl",
+  "segments_with_errors": 10,
+  "errors": 11
+ },
+ {
+  "clip_id": "438154728_0.28_600.36",
+  "company": "SWK Holdings Corporation",
+  "file": "438154728_0.28_600.36.jsonl",
+  "segments_with_errors": 8,
+  "errors": 9
+ },
+ {
+  "clip_id": "438533901_4792.60_5310.30",
+  "company": "HEICO Corporation",
+  "file": "438533901_4792.60_5310.30.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "439523109_41.96_639.74",
+  "company": "Skillsoft Corp.",
+  "file": "439523109_41.96_639.74.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "441676036_2400.52_2999.64",
+  "company": "AZZ Inc.",
+  "file": "441676036_2400.52_2999.64.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "441741401_1196.92_1795.50",
+  "company": "Apogee Enterprises, Inc.",
+  "file": "441741401_1196.92_1795.50.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "442282593_4825.00_5423.80",
+  "company": "Equifax Inc.",
+  "file": "442282593_4825.00_5423.80.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "442358637_2391.88_2749.82",
+  "company": "Stifel Financial Corp.",
+  "file": "442358637_2391.88_2749.82.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "442359691_2396.84_2995.16",
+  "company": "Lennox International Inc.",
+  "file": "442359691_2396.84_2995.16.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "442425391_0.76_597.50",
+  "company": "Veris Residential, Inc.",
+  "file": "442425391_0.76_597.50.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "442431389_1200.92_1799.88",
+  "company": "Tri Pointe Homes, Inc.",
+  "file": "442431389_1200.92_1799.88.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "442435670_2395.80_2990.06",
+  "company": "Patterson-UTI Energy, Inc.",
+  "file": "442435670_2395.80_2990.06.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "442581471_2446.68_2788.68",
+  "company": "Alliance Resource Partners, L.P.",
+  "file": "442581471_2446.68_2788.68.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "442659532_2387.80_2987.16",
+  "company": "Olin Corporation",
+  "file": "442659532_2387.80_2987.16.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "442659690_2387.16_2984.44",
+  "company": "The Hartford Insurance Group, Inc.",
+  "file": "442659690_2387.16_2984.44.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "442918169_96.44_693.96",
+  "company": "Quad/Graphics, Inc.",
+  "file": "442918169_96.44_693.96.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "442919557_2390.76_2985.88",
+  "company": "Verisk Analytics, Inc.",
+  "file": "442919557_2390.76_2985.88.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "442931147_2401.00_3000.68",
+  "company": "The Timken Company",
+  "file": "442931147_2401.00_3000.68.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "442959349_2404.12_2879.16",
+  "company": "Viavi Solutions Inc.",
+  "file": "442959349_2404.12_2879.16.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "442963610_2387.48_2987.72",
+  "company": "Chipotle Mexican Grill, Inc.",
+  "file": "442963610_2387.48_2987.72.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "442966338_44.60_643.00",
+  "company": "CBIZ, Inc.",
+  "file": "442966338_44.60_643.00.jsonl",
+  "segments_with_errors": 13,
+  "errors": 16
+ },
+ {
+  "clip_id": "442967821_2389.72_2800.28",
+  "company": "Carlisle Companies Incorporated",
+  "file": "442967821_2389.72_2800.28.jsonl",
+  "segments_with_errors": 11,
+  "errors": 11
+ },
+ {
+  "clip_id": "442978823_2437.48_3037.72",
+  "company": "Equinix, Inc.",
+  "file": "442978823_2437.48_3037.72.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "442978858_2409.32_3009.64",
+  "company": "Carvana Co.",
+  "file": "442978858_2409.32_3009.64.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "442982074_598.92_1199.00",
+  "company": "C.H. Robinson Worldwide, Inc.",
+  "file": "442982074_598.92_1199.00.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443164584_1193.72_1790.12",
+  "company": "LKQ Corporation",
+  "file": "443164584_1193.72_1790.12.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443168764_2392.20_2987.72",
+  "company": "Intercontinental Exchange, Inc.",
+  "file": "443168764_2392.20_2987.72.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "443192051_1211.88_1811.24",
+  "company": "CVR Partners, LP",
+  "file": "443192051_1211.88_1811.24.jsonl",
+  "segments_with_errors": 13,
+  "errors": 13
+ },
+ {
+  "clip_id": "443204684_2396.76_2995.56",
+  "company": "Rocket Companies, Inc.",
+  "file": "443204684_2396.76_2995.56.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443204686_2395.72_2987.26",
+  "company": "First Solar, Inc.",
+  "file": "443204686_2395.72_2987.26.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "443205305_2432.84_3020.12",
+  "company": "BJ's Restaurants, Inc.",
+  "file": "443205305_2432.84_3020.12.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "443205335_2396.68_2720.05",
+  "company": "Republic Services, Inc.",
+  "file": "443205335_2396.68_2720.05.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "443205748_2425.80_3022.68",
+  "company": "GoDaddy Inc.",
+  "file": "443205748_2425.80_3022.68.jsonl",
+  "segments_with_errors": 12,
+  "errors": 12
+ },
+ {
+  "clip_id": "443256014_2411.64_3005.64",
+  "company": "Exxon Mobil Corporation",
+  "file": "443256014_2411.64_3005.64.jsonl",
+  "segments_with_errors": 0,
+  "errors": 0
+ },
+ {
+  "clip_id": "443572654_2396.92_2996.60",
+  "company": "IAC Inc.",
+  "file": "443572654_2396.92_2996.60.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "443577124_2390.52_2986.36",
+  "company": "Harley-Davidson, Inc.",
+  "file": "443577124_2390.52_2986.36.jsonl",
+  "segments_with_errors": 7,
+  "errors": 10
+ },
+ {
+  "clip_id": "443585575_0.60_595.42",
+  "company": "IPG Photonics Corporation",
+  "file": "443585575_0.60_595.42.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "443591589_1239.72_1729.58",
+  "company": "Viper Energy, Inc.",
+  "file": "443591589_1239.72_1729.58.jsonl",
+  "segments_with_errors": 10,
+  "errors": 10
+ },
+ {
+  "clip_id": "443608388_1.56_600.36",
+  "company": "Latham Group, Inc.",
+  "file": "443608388_1.56_600.36.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "443661078_1206.04_1801.40",
+  "company": "Turning Point Brands, Inc.",
+  "file": "443661078_1206.04_1801.40.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "443661804_0.28_598.92",
+  "company": "Unifi, Inc.",
+  "file": "443661804_0.28_598.92.jsonl",
+  "segments_with_errors": 5,
+  "errors": 7
+ },
+ {
+  "clip_id": "443694044_2387.72_2984.84",
+  "company": "McKesson Corporation",
+  "file": "443694044_2387.72_2984.84.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443694258_2.04_602.04",
+  "company": "Frontier Group Holdings, Inc.",
+  "file": "443694258_2.04_602.04.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "443694570_2393.40_2991.00",
+  "company": "Light & Wonder, Inc.",
+  "file": "443694570_2393.40_2991.00.jsonl",
+  "segments_with_errors": 17,
+  "errors": 17
+ },
+ {
+  "clip_id": "443695375_1192.44_1517.24",
+  "company": "OraSure Technologies, Inc.",
+  "file": "443695375_1192.44_1517.24.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443745670_1433.32_1912.28",
+  "company": "Ispire Technology Inc.",
+  "file": "443745670_1433.32_1912.28.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "443748024_2388.84_2988.14",
+  "company": "Americold Realty Trust, Inc.",
+  "file": "443748024_2388.84_2988.14.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "443749336_1.40_601.24",
+  "company": "Marriott Vacations Worldwide Corporation",
+  "file": "443749336_1.40_601.24.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "443750330_45.24_643.10",
+  "company": "Carriage Services, Inc.",
+  "file": "443750330_45.24_643.10.jsonl",
+  "segments_with_errors": 8,
+  "errors": 12
+ },
+ {
+  "clip_id": "443751007_1197.56_1604.04",
+  "company": "Lamar Advertising Company",
+  "file": "443751007_1197.56_1604.04.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443753807_1306.28_1771.88",
+  "company": "KLX Energy Services Holdings, Inc.",
+  "file": "443753807_1306.28_1771.88.jsonl",
+  "segments_with_errors": 1,
+  "errors": 1
+ },
+ {
+  "clip_id": "443760147_1.48_599.10",
+  "company": "Interparfums, Inc.",
+  "file": "443760147_1.48_599.10.jsonl",
+  "segments_with_errors": 17,
+  "errors": 17
+ },
+ {
+  "clip_id": "443777210_1213.88_1800.94",
+  "company": "Karman Holdings Inc.",
+  "file": "443777210_1213.88_1800.94.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "443779116_51.80_651.96",
+  "company": "HA Sustainable Infrastructure Capital, Inc.",
+  "file": "443779116_51.80_651.96.jsonl",
+  "segments_with_errors": 2,
+  "errors": 2
+ },
+ {
+  "clip_id": "443779474_0.60_600.44",
+  "company": "Nature's Sunshine Products, Inc.",
+  "file": "443779474_0.60_600.44.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "443780630_2407.64_3003.56",
+  "company": "MP Materials Corp.",
+  "file": "443780630_2407.64_3003.56.jsonl",
+  "segments_with_errors": 8,
+  "errors": 9
+ },
+ {
+  "clip_id": "443824008_2401.72_2897.16",
+  "company": "Chesapeake Utilities Corporation",
+  "file": "443824008_2401.72_2897.16.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "443849971_2396.12_2995.24",
+  "company": "Viasat, Inc.",
+  "file": "443849971_2396.12_2995.24.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "443936201_2399.96_2999.00",
+  "company": "Life360, Inc.",
+  "file": "443936201_2399.96_2999.00.jsonl",
+  "segments_with_errors": 13,
+  "errors": 13
+ },
+ {
+  "clip_id": "444055086_47.88_643.88",
+  "company": "Nuwellis, Inc.",
+  "file": "444055086_47.88_643.88.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "444084881_2397.40_2996.92",
+  "company": "Flutter Entertainment Public Limited Company",
+  "file": "444084881_2397.40_2996.92.jsonl",
+  "segments_with_errors": 6,
+  "errors": 7
+ },
+ {
+  "clip_id": "444135971_2393.64_2993.00",
+  "company": "SharpLink Gaming, Inc.",
+  "file": "444135971_2393.64_2993.00.jsonl",
+  "segments_with_errors": 9,
+  "errors": 10
+ },
+ {
+  "clip_id": "444138651_1342.92_1750.20",
+  "company": "PetroTal Corp.",
+  "file": "444138651_1342.92_1750.20.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "444149777_22.68_619.72",
+  "company": "OneWater Marine Inc.",
+  "file": "444149777_22.68_619.72.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "444152761_3.56_599.88",
+  "company": "Sunrise Realty Trust, Inc.",
+  "file": "444152761_3.56_599.88.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "444160403_232.60_830.92",
+  "company": "Pioneer Power Solutions, Inc.",
+  "file": "444160403_232.60_830.92.jsonl",
+  "segments_with_errors": 5,
+  "errors": 6
+ },
+ {
+  "clip_id": "444160741_1447.88_1931.82",
+  "company": "Vuzix Corporation",
+  "file": "444160741_1447.88_1931.82.jsonl",
+  "segments_with_errors": 3,
+  "errors": 3
+ },
+ {
+  "clip_id": "444163481_2451.40_3051.56",
+  "company": "Stubhub Holdings, Inc.",
+  "file": "444163481_2451.40_3051.56.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "444218120_1212.28_1812.52",
+  "company": "Fossil Group, Inc.",
+  "file": "444218120_1212.28_1812.52.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "444563684_25.48_624.68",
+  "company": "Algorhythm Holdings, Inc.",
+  "file": "444563684_25.48_624.68.jsonl",
+  "segments_with_errors": 6,
+  "errors": 6
+ },
+ {
+  "clip_id": "444616073_2443.32_3043.40",
+  "company": "ProPhase Labs, Inc.",
+  "file": "444616073_2443.32_3043.40.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ },
+ {
+  "clip_id": "444860705_1.00_601.16",
+  "company": "Geospace Technologies Corporation",
+  "file": "444860705_1.00_601.16.jsonl",
+  "segments_with_errors": 5,
+  "errors": 5
+ },
+ {
+  "clip_id": "445002463_2410.76_3010.20",
+  "company": "Titan Machinery Inc.",
+  "file": "445002463_2410.76_3010.20.jsonl",
+  "segments_with_errors": 4,
+  "errors": 4
+ },
+ {
+  "clip_id": "445309538_2387.40_2983.42",
+  "company": "Signet Jewelers Limited",
+  "file": "445309538_2387.40_2983.42.jsonl",
+  "segments_with_errors": 9,
+  "errors": 9
+ },
+ {
+  "clip_id": "445480215_2392.44_2991.32",
+  "company": "DocuSign, Inc.",
+  "file": "445480215_2392.44_2991.32.jsonl",
+  "segments_with_errors": 7,
+  "errors": 7
+ },
+ {
+  "clip_id": "446300113_2401.88_3000.44",
+  "company": "Micron Technology, Inc.",
+  "file": "446300113_2401.88_3000.44.jsonl",
+  "segments_with_errors": 8,
+  "errors": 8
+ }
+]
