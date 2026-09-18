@@ -15,6 +15,7 @@ can sit next to translation annotations, but the "translation" is the English tr
 |---|---|
 | `_all_clips.jsonl` | **all annotations** — 1,905 lines covering every clip |
 | `_index.json` | all 290 clips → company, file name, number of segments/errors |
+| `verdicts_high_severity_human_verified.json` | human check of all 117 high-severity spans against the audio |
 | `<clip_id>.jsonl` | the same data split per clip — 290 files, one per audio |
 
 `_all_clips.jsonl` is exactly the concatenation of the per-clip files, so the two are interchangeable.
@@ -47,6 +48,47 @@ Two of the 290 clips contribute **no lines at all**, because no harmful error wa
 Their ASR/reference differences were only spelling and filler words; in a couple of Exxon spots Canary
 is arguably more correct than the reference. Both appear in `_index.json` with `"errors": 0`, so
 "reviewed, nothing found" stays distinguishable from "not processed".
+
+## Human verification of the high-severity subset
+
+All **117 high-severity spans** were listened to, one at a time (span ±3 s of audio), and judged
+against the reference. Results are in `verdicts_high_severity_human_verified.json`, one entry per
+span, joinable to `_all_clips.jsonl` through `id` = `<clip_id>#<segment>#<index in targets>`.
+
+Three verdicts:
+
+| `verdict` | Meaning | Count |
+|---|---|---|
+| `yes` | **Error confirmed** — the audio matches the reference, and the ASR output is wrong and harmful | 97 |
+| `no` | **Not an error** — the annotation does not hold up against the audio | 8 |
+| `hm` | **Unsure / partly right** — undecidable by ear, or the error is real but the marked span or the reading of it is off | 12 |
+
+So for the high-severity stratum: **82.9 % precision** counting strictly (97/117), or **92.4 %**
+among the spans that could be decided (97/105).
+
+| Harm type | Confirmed / checked |
+|---|---|
+| Safety/health/legal risk | 36/39 (92%) |
+| Derailing/contresens | 52/59 (88%) |
+| Embarrassing/laughable | 36/42 (86%) |
+| False attribution | 37/48 (77%) |
+| Offensive | 3/4 |
+| Other | 1/2 |
+
+(Rows sum above 117 because a span can carry several labels.)
+
+The 8 rejections have two recurring causes, both worth knowing before trusting the rest of the set:
+
+- **The reference is wrong and Canary is right.** Cigna `80%` → `8%`, Tetra Tech `USAID` → `USA`,
+  SkyWest `41.7 million` → `$1.7 million`: the audio agrees with the ASR, so these are reference
+  errors, not ASR errors.
+- **Verbatim ASR versus cleaned reference.** The First Watch and Signet `there's there's there's`
+  repetitions were really spoken; the reference tidied them away and the annotation read the
+  repetition as a hallucination.
+
+`_all_clips.jsonl` is **left exactly as the LLM produced it** — the verdicts are kept in a separate
+file rather than folded back in, so the raw marker output stays measurable. Filter on the verdicts
+if you want a human-verified subset.
 
 ## Identifiers and audio
 
@@ -103,7 +145,8 @@ points are preserved, which matters for figures such as `$6.2` vs `62`). Each cl
 segment by segment by an LLM (Claude Opus 5) against the workshop harm protocol; the quoted words were
 located back in the transcripts automatically.
 
-- **No one listened to the audio.** Judgements come from the text alone. Use `span_orig_start` to check.
+- **The annotations were made from text alone.** The 117 high-severity spans have since been checked
+  against the audio (see above); everything else has not. Use `span_orig_start` to listen.
 - **The reference is not always right.** In some places Canary is correct and the reference is wrong;
   the reviewers skipped those where they noticed, but not exhaustively.
 - **`low` severity is noisy** — largely minor name misspellings, often the same name repeated.

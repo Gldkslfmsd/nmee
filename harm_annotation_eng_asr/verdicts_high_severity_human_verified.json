@@ -1,0 +1,1951 @@
+[
+ {
+  "id": "424450398_2433.56_3031.72#19#0",
+  "clip_id": "424450398_2433.56_3031.72",
+  "company": "McCormick & Company, Incorporated",
+  "segment": 19,
+  "span": "big volumes,",
+  "intended": "weak volumes.",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The CEO warns about weak volumes in EMEA flavor solutions, and the transcript turns that into 'big volumes'. The weakness becomes a strength, so investors get the opposite message.",
+  "span_start_in_clip": 100.64,
+  "span_end_in_clip": 101.2,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "425475241_2423.72_3023.24#33#0",
+  "clip_id": "425475241_2423.72_3023.24",
+  "company": "The Cigna Group",
+  "segment": 33,
+  "span": "8%",
+  "intended": "80%",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The medical cost ratio on 60% of the book was about 80%. The transcript says 8%, an impossible figure that makes that business look hugely profitable and misstates a key metric for a health insurer.",
+  "span_start_in_clip": 240.24,
+  "span_end_in_clip": 240.72,
+  "verdict": "no",
+  "note": "Reference is wrong"
+ },
+ {
+  "id": "425489402_601.24_1201.08#16#0",
+  "clip_id": "425489402_601.24_1201.08",
+  "company": "Waste Management, Inc.",
+  "segment": 16,
+  "span": "24%",
+  "intended": "The 4.4%",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "MSW landfill volumes grew 4.4% for the year; the transcript says 24%, a wildly inflated growth figure that could mislead investors.",
+  "span_start_in_clip": 150,
+  "span_end_in_clip": 150.64,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "425490961_0.68_599.48#11#0",
+  "clip_id": "425490961_0.68_599.48",
+  "company": "SunCoke Energy, Inc.",
+  "segment": 11,
+  "span": "Catherine",
+  "intended": "Marinko,",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Male CFO Mark Marinko replaced by 'Catherine Gates, President and CEO' — wrong person, wrong gender, wrong role",
+  "span_start_in_clip": 48.4,
+  "span_end_in_clip": 48.64,
+  "verdict": "hm",
+  "note": "Span is wrong"
+ },
+ {
+  "id": "425494771_2398.68_2998.76#27#0",
+  "clip_id": "425494771_2398.68_2998.76",
+  "company": "Tetra Tech, Inc.",
+  "segment": 27,
+  "span": "USA.",
+  "intended": "USAID.",
+  "harm_types": [
+   "False attribution",
+   "Derailing/contresens"
+  ],
+  "explanation": "The foreign assistance program run for USAID (under political scrutiny) becomes 'with USA', erasing the agency whose cuts are the topic of the question.",
+  "span_start_in_clip": 151.36,
+  "span_end_in_clip": 151.36,
+  "verdict": "no",
+  "note": "Reference is wrong"
+ },
+ {
+  "id": "425537679_42.60_642.68#60#0",
+  "clip_id": "425537679_42.60_642.68",
+  "company": "SkyWest, Inc.",
+  "segment": 60,
+  "span": "$1.7 million,",
+  "intended": "41.7 million",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "Weighted average share count of 41.7 million becomes '$1.7 million' dollars, wrong value and unit for a per-share calculation.",
+  "span_start_in_clip": 441.36,
+  "span_end_in_clip": 442.4,
+  "verdict": "no",
+  "note": "Reference is wrong"
+ },
+ {
+  "id": "426392774_18.60_613.00#59#0",
+  "clip_id": "426392774_18.60_613.00",
+  "company": "Twin Disc, Incorporated",
+  "segment": 59,
+  "span": "$7",
+  "intended": "$0.7",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "EPS on $900K net income is a few cents per share; the transcript says $7 per diluted share (for both the profit and the prior-year loss), a hugely inflated earnings figure an investor could act on.",
+  "span_start_in_clip": 475.04,
+  "span_end_in_clip": 475.28,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426517199_2397.24_2996.92#52#0",
+  "clip_id": "426517199_2397.24_2996.92",
+  "company": "Linde Public Limited Company",
+  "segment": 52,
+  "span": "Orange Lionel",
+  "intended": "customers, Owens-Illinois",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The glass maker Owens-Illinois is cited as a customer, but the transcript turns it into 'Orange Lionel', which reads like a different company or a person.",
+  "span_start_in_clip": 300.48,
+  "span_end_in_clip": 301.2,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426520005_601.96_1200.52#10#0",
+  "clip_id": "426520005_601.96_1200.52",
+  "company": "Philip Morris International Inc.",
+  "segment": 10,
+  "span": "Airbnb",
+  "intended": "RBH",
+  "harm_types": [
+   "False attribution",
+   "Derailing/contresens"
+  ],
+  "explanation": "PMI impaired its investment in RBH (Rothmans, Benson & Hedges). The transcript says PMI impaired an Airbnb equity investment, inventing a stake in and write-down of another listed company.",
+  "span_start_in_clip": 137.2,
+  "span_end_in_clip": 137.76,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426520005_601.96_1200.52#11#0",
+  "clip_id": "426520005_601.96_1200.52",
+  "company": "Philip Morris International Inc.",
+  "segment": 11,
+  "span": "Airbnb",
+  "intended": "RBH",
+  "harm_types": [
+   "False attribution",
+   "Derailing/contresens"
+  ],
+  "explanation": "The transcript says future dividend income will come from Airbnb instead of RBH, the Canadian tobacco subsidiary.",
+  "span_start_in_clip": 144.32,
+  "span_end_in_clip": 144.8,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426521130_0.76_599.56#46#0",
+  "clip_id": "426521130_0.76_599.56",
+  "company": "U-Haul Holding Company",
+  "segment": 46,
+  "span": "$35",
+  "intended": "$0.35",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "EPS of $0.35 (vs $0.51 last year) becomes '$35' and '$51' per share, a hundredfold overstatement of earnings per share that would badly mislead an investor.",
+  "span_start_in_clip": 280.56,
+  "span_end_in_clip": 281.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426521130_0.76_599.56#57#0",
+  "clip_id": "426521130_0.76_599.56",
+  "company": "U-Haul Holding Company",
+  "segment": 57,
+  "span": "1.587 million.",
+  "intended": "$1.587 billion,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Nine-month rental-equipment capex of $1.587 billion becomes '1.587 million', understating capital spending a thousandfold (and contradicting the stated $237M increase).",
+  "span_start_in_clip": 388.16,
+  "span_end_in_clip": 390.16,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "426995861_2396.60_2992.84#74#0",
+  "clip_id": "426995861_2396.60_2992.84",
+  "company": "Axcelis Technologies, Inc.",
+  "segment": 74,
+  "span": "Securities, Jeremiah Tolkien. Thank you, Lionel. It's",
+  "intended": "Steelhead",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "False attribution"
+  ],
+  "explanation": "Operator introduces analyst David Duley; the transcript hallucinates the invented names 'Jeremiah Tolkien' and 'Lionel' who never spoke.",
+  "span_start_in_clip": 569.52,
+  "span_end_in_clip": 570.88,
+  "verdict": "no",
+  "note": ""
+ },
+ {
+  "id": "426999905_1200.92_1800.52#6#0",
+  "clip_id": "426999905_1200.92_1800.52",
+  "company": "Sunoco LP",
+  "segment": 6,
+  "span": "Cheng with Mark Leaf.",
+  "intended": "Chen",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Analyst Theresa Chen of Barclays becomes 'Theresa Cheng with Mark Leaf', a wrong surname and a non-existent firm/person.",
+  "span_start_in_clip": 24.24,
+  "span_end_in_clip": 25.28,
+  "verdict": "no",
+  "note": ""
+ },
+ {
+  "id": "426999905_1200.92_1800.52#41#0",
+  "clip_id": "426999905_1200.92_1800.52",
+  "company": "Sunoco LP",
+  "segment": 41,
+  "span": "Linus Bureau of Bones",
+  "intended": "line of Spiro Dounis",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Citi analyst Spiro Dounis becomes 'Linus Bureau of Bones', an absurd and unrecognizable identity.",
+  "span_start_in_clip": 285.76,
+  "span_end_in_clip": 286.96,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427125254_40.60_637.56#59#0",
+  "clip_id": "427125254_40.60_637.56",
+  "company": "Pyxus International, Inc.",
+  "segment": 59,
+  "span": "to $254 million",
+  "intended": "$276 million compared to",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Nine-month gross profit grew to $276M vs $254M last year; the transcript drops the current figure and says it 'grew to $254 million last year', misreporting the reported gross profit.",
+  "span_start_in_clip": 539.2,
+  "span_end_in_clip": 543.2,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427220698_2399.72_2998.20#5#0",
+  "clip_id": "427220698_2399.72_2998.20",
+  "company": "CEVA, Inc.",
+  "segment": 5,
+  "span": "the 180 billion",
+  "intended": "million",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Wi-Fi shipments of 180 million become '180 billion', a 1000x overstatement of the volume metric that would badly mislead an investor.",
+  "span_start_in_clip": 41.92,
+  "span_end_in_clip": 43.36,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427220698_2399.72_2998.20#55#0",
+  "clip_id": "427220698_2399.72_2998.20",
+  "company": "CEVA, Inc.",
+  "segment": 55,
+  "span": "Weaver with Broadways.",
+  "intended": "Reimer with Barclays.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Barclays analyst Chris Reimer becomes 'Chris Weaver with Broadways', so both the analyst's name and his bank are wrong.",
+  "span_start_in_clip": 388.72,
+  "span_end_in_clip": 390.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427220698_2399.72_2998.20#81#0",
+  "clip_id": "427220698_2399.72_2998.20",
+  "company": "CEVA, Inc.",
+  "segment": 81,
+  "span": "Catherine Castigan Roosevelt's case.",
+  "intended": "Kevin Cassidy of Rosenblatt",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Rosenblatt analyst Kevin Cassidy becomes 'Catherine Castigan' of 'Roosevelt's case', which changes his gender, his name and his firm.",
+  "span_start_in_clip": 531.52,
+  "span_end_in_clip": 533.28,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427324287_2397.24_2948.60#48#0",
+  "clip_id": "427324287_2397.24_2948.60",
+  "company": "American Axle & Manufacturing Holdings, Inc.",
+  "segment": 48,
+  "span": "Wallace with Berkeley.",
+  "intended": "Levy with Barclays.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Analyst Dan Levy of Barclays is introduced as \"Dan Wallace with Berkeley\": a different person at a different real institution.",
+  "span_start_in_clip": 260.88,
+  "span_end_in_clip": 262,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "427526510_0.28_597.02#61#0",
+  "clip_id": "427526510_0.28_597.02",
+  "company": "The Andersons, Inc.",
+  "segment": 61,
+  "span": "$10022",
+  "intended": "$100 million in 2024 compared to $122 million in",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Q4 operating cash flow of $100M (2024) vs $122M (2023) collapses into '$10022 million in 2023', a wildly wrong figure with the year-over-year comparison lost.",
+  "span_start_in_clip": 508.16,
+  "span_end_in_clip": 510,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "428064605_0.84_599.42#71#0",
+  "clip_id": "428064605_0.84_599.42",
+  "company": "Opendoor Technologies Inc.",
+  "segment": 71,
+  "span": "2015.",
+  "intended": "2023,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Q4 revenue growth of 25% was versus Q4 2023; transcript compares to 2015, a completely wrong baseline for the reported growth figure.",
+  "span_start_in_clip": 480.32,
+  "span_end_in_clip": 480.8,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "428064605_0.84_599.42#80#0",
+  "clip_id": "428064605_0.84_599.42",
+  "company": "Opendoor Technologies Inc.",
+  "segment": 80,
+  "span": "year over year loss.",
+  "intended": "year-over-year improvement.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Adjusted EBITDA showed a $20M year-over-year improvement; transcript says a $20M year-over-year loss, reversing the financial message.",
+  "span_start_in_clip": 570.32,
+  "span_end_in_clip": 570.96,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "428204627_1.16_597.08#26#0",
+  "clip_id": "428204627_1.16_597.08",
+  "company": "Global Medical REIT Inc.",
+  "segment": 26,
+  "span": "$15",
+  "intended": "$0.15",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "FFO of 15 cents per share becomes $15 per share, a hundredfold overstatement of a key REIT earnings metric that would badly mislead investors.",
+  "span_start_in_clip": 205.6,
+  "span_end_in_clip": 206,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "428722878_0.68_596.84#33#1",
+  "clip_id": "428722878_0.68_596.84",
+  "company": "ChargePoint Holdings, Inc.",
+  "segment": 33,
+  "span": "90%.",
+  "intended": "9%.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "North American EV sales grew 9% in 2024; the transcript says 90%. This hugely overstates market growth on an investor call.",
+  "span_start_in_clip": 262.88,
+  "span_end_in_clip": 263.52,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "428868927_2420.36_3014.70#20#0",
+  "clip_id": "428868927_2420.36_3014.70",
+  "company": "FRP Holdings, Inc.",
+  "segment": 20,
+  "span": "That's what I was expecting.",
+  "intended": "Okay, that wasn't expected.",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The shareholder is surprised that all Cranberry tenants will leave ('that wasn't expected'). The transcript says the opposite, 'That's what I was expecting', and contradicts his next line that he is surprised.",
+  "span_start_in_clip": 132.48,
+  "span_end_in_clip": 134.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "429570526_23.40_619.72#21#0",
+  "clip_id": "429570526_23.40_619.72",
+  "company": "Lifetime Brands, Inc.",
+  "segment": 21,
+  "span": "230 million dollars.",
+  "intended": "as compared to",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The prior-year comparison ($203 million, given in the next segment) is also transcribed here as '230 million dollars'. Q4 sales of $215 million would then compare to $230 million, contradicting the reported 6% increase.",
+  "span_start_in_clip": 149.52,
+  "span_end_in_clip": 150.96,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "429724796_1196.60_1796.84#61#0",
+  "clip_id": "429724796_1196.60_1796.84",
+  "company": "Sangamo Therapeutics, Inc.",
+  "segment": 61,
+  "span": "intra-fecal",
+  "intended": "intrathecal",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The route of administration, intrathecal (into spinal fluid), becomes 'intra-fecal'. This is both absurd and a wrong statement about how the gene therapy is delivered.",
+  "span_start_in_clip": 318.4,
+  "span_end_in_clip": 319.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "429724796_1196.60_1796.84#62#0",
+  "clip_id": "429724796_1196.60_1796.84",
+  "company": "Sangamo Therapeutics, Inc.",
+  "segment": 62,
+  "span": "It's intra-fecal,",
+  "intended": "Intrathecal is Intrathecal,",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The executive confirms the intrathecal route; the transcript has them confirm an 'intra-fecal' route.",
+  "span_start_in_clip": 320.96,
+  "span_end_in_clip": 321.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "430437660_164.68_762.04#72#1",
+  "clip_id": "430437660_164.68_762.04",
+  "company": "ASP Isotopes Inc.",
+  "segment": 72,
+  "span": "2.5 million dollars a day",
+  "intended": "$2.5 million a year.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The carbon-14 take-or-pay contract may exceed $2.5 million a year; the transcript says $2.5 million a day, overstating revenue ~365x and could mislead investors.",
+  "span_start_in_clip": 371.76,
+  "span_end_in_clip": 372.96,
+  "verdict": "hm",
+  "note": "Difficult to said"
+ },
+ {
+  "id": "431501082_2408.92_3004.30#52#0",
+  "clip_id": "431501082_2408.92_3004.30",
+  "company": "Robert Half Inc.",
+  "segment": 52,
+  "span": "12%",
+  "intended": "$0.12",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The restructuring's $0.12 EPS benefit becomes a '12% benefit', a very different and inflated financial message for investors.",
+  "span_start_in_clip": 411.76,
+  "span_end_in_clip": 412.16,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431661420_2389.88_2945.74#47#0",
+  "clip_id": "431661420_2389.88_2945.74",
+  "company": "Rollins, Inc.",
+  "segment": 47,
+  "span": "that maybe",
+  "intended": "have been around for decades, if not longer. I'm sure there's other businesses that",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The executive says Rollins buys businesses that have been around for decades. The deletion makes the transcript say 'We're buying good businesses that maybe haven't been around as long', which reverses the M&A message.",
+  "span_start_in_clip": 345.52,
+  "span_end_in_clip": 350.4,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431671567_24.60_620.36#5#0",
+  "clip_id": "431671567_24.60_620.36",
+  "company": "Balchem Corporation",
+  "segment": 5,
+  "span": "Lauren Pinkston,",
+  "intended": "Martin Bengtsson,",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The CFO Martin Bengtsson is introduced as 'Lauren Pinkston', a completely different, female-sounding name.",
+  "span_start_in_clip": 21.04,
+  "span_end_in_clip": 21.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431700084_44.28_640.06#62#0",
+  "clip_id": "431700084_44.28_640.06",
+  "company": "Socket Mobile, Inc.",
+  "segment": 62,
+  "span": "$9 million compared to $2.5 million loss in Q1 2024 and $4",
+  "intended": "$0.9 million compared to $0.5 million loss in Q1 2024 and the $0.4",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Operating losses of $0.9M, $0.5M and $0.4M become $9M, $2.5M and $4M. For a company with $4M quarterly revenue, the transcript shows losses larger than revenue, suggesting a solvency crisis.",
+  "span_start_in_clip": 520.64,
+  "span_end_in_clip": 528,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431700084_44.28_640.06#64#0",
+  "clip_id": "431700084_44.28_640.06",
+  "company": "Socket Mobile, Inc.",
+  "segment": 64,
+  "span": "$13 compared to $7",
+  "intended": "$0.13 compared to $0.07",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Diluted loss per share of $0.13 (vs $0.07) becomes $13 (vs $7), a 100x overstatement of losses.",
+  "span_start_in_clip": 551.2,
+  "span_end_in_clip": 553.76,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431704177_2428.52_2735.40#25#0",
+  "clip_id": "431704177_2428.52_2735.40",
+  "company": "The Boston Beer Company, Inc.",
+  "segment": 25,
+  "span": "white.",
+  "intended": "light.",
+  "harm_types": [
+   "False attribution",
+   "Offensive"
+  ],
+  "explanation": "The CEO means distribution opportunities for Twisted Tea Light; the transcript says 'opportunities for white', and the next sentence is about opportunities 'in Hispanics', so it reads as racial targeting.",
+  "span_start_in_clip": 161.12,
+  "span_end_in_clip": 161.36,
+  "verdict": "no",
+  "note": ""
+ },
+ {
+  "id": "431704177_2428.52_2735.40#31#0",
+  "clip_id": "431704177_2428.52_2735.40",
+  "company": "The Boston Beer Company, Inc.",
+  "segment": 31,
+  "span": "15",
+  "intended": "50",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "Twisted Tea is a 50-million-case brand; the transcript says 15 million, understating the scale of the company's biggest brand by more than two-thirds.",
+  "span_start_in_clip": 197.84,
+  "span_end_in_clip": 198.24,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "431904970_0.36_599.24#85#0",
+  "clip_id": "431904970_0.36_599.24",
+  "company": "Carter's, Inc.",
+  "segment": 85,
+  "span": "1.400 US dollars compared to 1.400 US dollars",
+  "intended": "$1.04",
+  "harm_types": [
+   "Derailing/contresens",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Prior-year adjusted EPS of $1.04 becomes $1.40, and the phrase is repeated. The year-over-year EPS decline looks much bigger than it was (from 1.40 to 0.66 instead of 1.04 to 0.66).",
+  "span_start_in_clip": 570.48,
+  "span_end_in_clip": 572.16,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432089690_112.84_708.68#13#0",
+  "clip_id": "432089690_112.84_708.68",
+  "company": "Travelzoo",
+  "segment": 13,
+  "span": "Olga Bartel,",
+  "intended": "Holger Bartel;",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Travelzoo's male Global CEO Holger Bartel is introduced as 'Olga Bartel', a female name - wrong identity and gender for the top executive.",
+  "span_start_in_clip": 96,
+  "span_end_in_clip": 97.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432154881_2402.20_2942.86#57#0",
+  "clip_id": "432154881_2402.20_2942.86",
+  "company": "Gibraltar Industries, Inc.",
+  "segment": 57,
+  "span": "actually only",
+  "intended": "not actually",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The CEO says project delays have NOT been seen in renewables yet. The transcript says the opposite, that delays have been seen ONLY in renewables, which misleads investors about current project push-outs.",
+  "span_start_in_clip": 322.48,
+  "span_end_in_clip": 322.72,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432154881_2402.20_2942.86#77#0",
+  "clip_id": "432154881_2402.20_2942.86",
+  "company": "Gibraltar Industries, Inc.",
+  "segment": 77,
+  "span": "more, I'm going to say dangerous.",
+  "intended": "more deemed, I'm going to say deemed essential,",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Derailing/contresens"
+  ],
+  "explanation": "The CEO describes Gibraltar's businesses as 'deemed essential'. The transcript has him calling them 'dangerous', which is absurd and damaging.",
+  "span_start_in_clip": 435.2,
+  "span_end_in_clip": 436.8,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432188055_1194.20_1792.12#77#0",
+  "clip_id": "432188055_1194.20_1792.12",
+  "company": "Netgear, Inc.",
+  "segment": 77,
+  "span": "200 billion dollars",
+  "intended": "$200 million,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The revenue level needed to reach operating breakeven is $200 million; '200 billion dollars' makes it 1000x larger, implying profitability is unreachable.",
+  "span_start_in_clip": 533.6,
+  "span_end_in_clip": 534.56,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432216041_2382.12_2982.28#39#0",
+  "clip_id": "432216041_2382.12_2982.28",
+  "company": "AMETEK, Inc.",
+  "segment": 39,
+  "span": "a particular intestine measurement?urement side,",
+  "intended": "particularly on test and measurement side.",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Analyst asks about the 'test and measurement' business; transcript says 'intestine measurement', absurd for an instrumentation company.",
+  "span_start_in_clip": 189.36,
+  "span_end_in_clip": 191.44,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "432246475_2425.88_3025.34#3#0",
+  "clip_id": "432246475_2425.88_3025.34",
+  "company": "Apple Inc.",
+  "segment": 3,
+  "span": "UPS.",
+  "intended": "UBS.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The analyst's bank UBS becomes UPS, a different real company (the parcel carrier).",
+  "span_start_in_clip": 10.88,
+  "span_end_in_clip": 11.36,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432276136_2393.72_2992.20#65#0",
+  "clip_id": "432276136_2393.72_2992.20",
+  "company": "Terex Corporation",
+  "segment": 65,
+  "span": "17%",
+  "intended": "70%",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The CFO says about 70% of steel used is HRC. The transcript says 17%, badly misrepresenting commodity exposure and the scope of the hedge.",
+  "span_start_in_clip": 370.16,
+  "span_end_in_clip": 370.88,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432277794_93.32_691.24#68#0",
+  "clip_id": "432277794_93.32_691.24",
+  "company": "Cooper-Standard Holdings Inc.",
+  "segment": 68,
+  "span": "$19",
+  "intended": "$0.19",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Adjusted EPS of 19 cents becomes $19 per share, a 100x overstatement of earnings that could mislead investors.",
+  "span_start_in_clip": 594.72,
+  "span_end_in_clip": 595.12,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432354621_0.12_599.58#34#0",
+  "clip_id": "432354621_0.12_599.58",
+  "company": "JBT Marel Corporation",
+  "segment": 34,
+  "span": "customer behavior closely",
+  "intended": "to date, we have had a handful of lost or delayed orders. We are monitoring customer behavior",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The CEO disclosed 'a handful of lost or delayed orders' due to tariffs; this admission is deleted, so the transcript suggests no negative customer impact - understating a risk investors care about.",
+  "span_start_in_clip": 294.64,
+  "span_end_in_clip": 302.24,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432409896_2393.80_2993.56#7#0",
+  "clip_id": "432409896_2393.80_2993.56",
+  "company": "First Watch Restaurant Group, Inc.",
+  "segment": 7,
+  "span": "there's there's there's there's",
+  "intended": "",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Canary inserts four consecutive 'there's' where the reference has none: '…You know, there's there's there's there's some on, you know, food products…' — quadruple stutter, laughably incoherent in a formal earnings call",
+  "span_start_in_clip": 29.6,
+  "span_end_in_clip": 30.96,
+  "verdict": "no",
+  "note": ""
+ },
+ {
+  "id": "432447514_1.48_599.32#62#0",
+  "clip_id": "432447514_1.48_599.32",
+  "company": "Corsair Gaming, Inc.",
+  "segment": 62,
+  "span": "production Despite 75% of our total",
+  "intended": "of our total sales",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The CEO says the US is about 45% of total sales. The transcript inserts '45% of our total production Despite 75% of our total sales', so it states a false US revenue share, which matters for tariff exposure.",
+  "span_start_in_clip": 450.72,
+  "span_end_in_clip": 451.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432447514_1.48_599.32#66#0",
+  "clip_id": "432447514_1.48_599.32",
+  "company": "Corsair Gaming, Inc.",
+  "segment": 66,
+  "span": "Coursera",
+  "intended": "Corsair",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The company's own name Corsair becomes Coursera, a different real public company (online education).",
+  "span_start_in_clip": 488.64,
+  "span_end_in_clip": 489.04,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "432448149_2385.00_2984.44#5#0",
+  "clip_id": "432448149_2385.00_2984.44",
+  "company": "Super Micro Computer, Inc.",
+  "segment": 5,
+  "span": "duplicate cooling, especially for Paraco Ware, and a huge hope for that.",
+  "intended": "deep cooling, especially for Blackwell and future product.",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'Deep cooling' for NVIDIA Blackwell becomes 'duplicate cooling' for 'Paraco Ware', a nonexistent product, and 'a huge hope' replaces 'future product'.",
+  "span_start_in_clip": 44,
+  "span_end_in_clip": 47.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432553781_2388.52_2975.96#58#0",
+  "clip_id": "432553781_2388.52_2975.96",
+  "company": "Somnigroup International Inc.",
+  "segment": 58,
+  "span": "Temper is rocky.",
+  "intended": "Tempur's rocking.",
+  "harm_types": [
+   "Derailing/contresens",
+   "False attribution"
+  ],
+  "explanation": "The CEO says the Tempur brand is 'rocking' (performing very well); the transcript says 'Temper is rocky', the opposite message about the lead international brand.",
+  "span_start_in_clip": 358.32,
+  "span_end_in_clip": 359.2,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "432573437_1193.96_1794.20#18#0",
+  "clip_id": "432573437_1193.96_1794.20",
+  "company": "Stagwell Inc.",
+  "segment": 18,
+  "span": "Let's let's let's let's",
+  "intended": "places like Starbucks and Visa",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Other"
+  ],
+  "explanation": "The segment naming client wins at Starbucks and Visa is replaced by a duplicated passage ending in a long hallucinated 'let's let's...' loop; the named client wins disappear.",
+  "span_start_in_clip": -1,
+  "span_end_in_clip": -1,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "432573437_1193.96_1794.20#19#0",
+  "clip_id": "432573437_1193.96_1794.20",
+  "company": "Stagwell Inc.",
+  "segment": 19,
+  "span": "let's let's let's",
+  "intended": "keep going",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The moderator's 'Let's keep going just on the net new business' becomes a hallucinated loop of 'let's' repeated well over a hundred times - absurd output in an investor transcript.",
+  "span_start_in_clip": -1,
+  "span_end_in_clip": -1,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432573437_1193.96_1794.20#20#0",
+  "clip_id": "432573437_1193.96_1794.20",
+  "company": "Stagwell Inc.",
+  "segment": 20,
+  "span": "Let's let's let's",
+  "intended": "question from Laura Martin over at Needham.",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Other"
+  ],
+  "explanation": "The analyst question from Laura Martin (Needham) is entirely replaced by a copy of the previous passage with the 'let's' repetition loop, so the question and its author are lost.",
+  "span_start_in_clip": -1,
+  "span_end_in_clip": -1,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432864953_105.96_704.14#66#0",
+  "clip_id": "432864953_105.96_704.14",
+  "company": "Flyexclusive, Inc.",
+  "segment": 66,
+  "span": "1015% year over year.",
+  "intended": "10% and April was up 15% year-over-year.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "CEO says Q1 retail charter revenue was up 10% and April up 15%; the transcript claims growth of 1015% year over year, a wildly false financial figure that could mislead investors.",
+  "span_start_in_clip": 509.76,
+  "span_end_in_clip": 513.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "432965659_59.32_659.24#37#0",
+  "clip_id": "432965659_59.32_659.24",
+  "company": "Nuvve Holding Corp.",
+  "segment": 37,
+  "span": "in Siberia is all",
+  "intended": "needs",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "False attribution"
+  ],
+  "explanation": "A general statement about grid modernization gains a hallucinated 'in Siberia', which puts a US/Japan company's strategy in an absurd location.",
+  "span_start_in_clip": 269.84,
+  "span_end_in_clip": 270.48,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "433001856_53.40_645.16#63#0",
+  "clip_id": "433001856_53.40_645.16",
+  "company": "Wrap Technologies, Inc.",
+  "segment": 63,
+  "span": "bullet raps",
+  "intended": "BolaWrap",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The non-lethal restraint BolaWrap becomes 'bullet raps' in a sentence about use-of-force reporting, suggesting firearms and undermining the product's non-lethal positioning.",
+  "span_start_in_clip": 358.72,
+  "span_end_in_clip": 359.36,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "434061966_2392.84_2992.44#4#0",
+  "clip_id": "434061966_2392.84_2992.44",
+  "company": "Ollie's Bargain Outlet Holdings, Inc.",
+  "segment": 4,
+  "span": "categories in have still",
+  "intended": "the low to mid single-digit range. The seasonal categories",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The CFO said non-seasonal categories are comping strongly in the low-to-mid single digits and seasonal categories started soft; the transcript drops that clause and says non-seasonal categories 'have still started off soft', which reverses the message about the core business.",
+  "span_start_in_clip": 25.52,
+  "span_end_in_clip": 32.56,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "434233747_2421.56_3019.40#75#0",
+  "clip_id": "434233747_2421.56_3019.40",
+  "company": "Vail Resorts, Inc.",
+  "segment": 75,
+  "span": "Myopic Gear and Myopic",
+  "intended": "My Epic Gear and My Epic",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Vail's flagship ancillary products My Epic Gear / My Epic Pro become 'Myopic Gear' and 'Myopic Pro', a derogatory word (short-sighted) applied to the company's strategic priorities.",
+  "span_start_in_clip": 460.88,
+  "span_end_in_clip": 462.8,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437161957_2404.04_3002.36#93#0",
+  "clip_id": "437161957_2404.04_3002.36",
+  "company": "Mohawk Industries, Inc.",
+  "segment": 93,
+  "span": "King with Record",
+  "intended": "Kim with Evercore",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Evercore ISI analyst Stephen Kim becomes 'Stephen King' (the famous novelist) of a non-existent 'Record ISI'.",
+  "span_start_in_clip": 574.08,
+  "span_end_in_clip": 575.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437308334_13.32_612.04#40#0",
+  "clip_id": "437308334_13.32_612.04",
+  "company": "NexPoint Residential Trust, Inc.",
+  "segment": 40,
+  "span": "$5.14 at the low end to $5.34 at the high end,",
+  "intended": "5.25% at the low end to 5.75% at the high end.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "The cap rates behind the NAV (5.25%–5.75%) become dollar amounts with different values ($5.14–$5.34), which misstates the valuation assumptions investors rely on.",
+  "span_start_in_clip": 311.84,
+  "span_end_in_clip": 315.12,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437308334_13.32_612.04#46#2",
+  "clip_id": "437308334_13.32_612.04",
+  "company": "NexPoint Residential Trust, Inc.",
+  "segment": 46,
+  "span": "Cenovus.",
+  "intended": "Synovus.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The lender Synovus (a US bank) becomes Cenovus, a real Canadian oil company, misidentifying a party to the $200 million credit facility.",
+  "span_start_in_clip": 379.68,
+  "span_end_in_clip": 380.24,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437308334_13.32_612.04#62#0",
+  "clip_id": "437308334_13.32_612.04",
+  "company": "NexPoint Residential Trust, Inc.",
+  "segment": 62,
+  "span": "1.1%.",
+  "intended": "negative 1.1%,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Same-store NOI growth was negative 1.1%. The dropped 'negative' turns a decline into growth and hides deteriorating operations.",
+  "span_start_in_clip": 479.36,
+  "span_end_in_clip": 480.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437328583_1234.12_1833.82#9#0",
+  "clip_id": "437328583_1234.12_1833.82",
+  "company": "Mondelez International, Inc.",
+  "segment": 9,
+  "span": "vicious",
+  "intended": "virtuous",
+  "harm_types": [
+   "Derailing/contresens",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The CEO praises the company's 'virtuous model'; the transcript calls it the 'vicious model', the opposite and damaging meaning.",
+  "span_start_in_clip": 79.6,
+  "span_end_in_clip": 80.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437363084_75.32_674.76#70#0",
+  "clip_id": "437363084_75.32_674.76",
+  "company": "Luxfer Holdings PLC",
+  "segment": 70,
+  "span": "97 cents to 1.50,",
+  "intended": "$0.97 to $1.05",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Raised EPS guidance of $0.97-$1.05 becomes '97 cents to 1.50', inflating the top of guidance by ~43% and misleading investors.",
+  "span_start_in_clip": 574.4,
+  "span_end_in_clip": 576.4,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "437367156_2392.60_2992.36#88#0",
+  "clip_id": "437367156_2392.60_2992.36",
+  "company": "Clean Harbors, Inc.",
+  "segment": 88,
+  "span": "Jemima,",
+  "intended": "James,",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The analyst James Schumm (TD Cowen) is addressed as \"Jemima\", a woman's name, so his gender changes.",
+  "span_start_in_clip": 570.48,
+  "span_end_in_clip": 570.72,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437397841_2396.12_2995.08#49#0",
+  "clip_id": "437397841_2396.12_2995.08",
+  "company": "eBay Inc.",
+  "segment": 49,
+  "span": "Med Gala, chaperone",
+  "intended": "Met Gala and Chappell Roan",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The celebrity Chappell Roan dressed in eBay at the Met Gala becomes 'chaperone' at the 'Med Gala', erasing the star and producing an absurd claim about a chaperone.",
+  "span_start_in_clip": 331.76,
+  "span_end_in_clip": 334.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437397841_2396.12_2995.08#55#1",
+  "clip_id": "437397841_2396.12_2995.08",
+  "company": "eBay Inc.",
+  "segment": 55,
+  "span": "Birth Theme",
+  "intended": "Bernstein",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The well-known broker Bernstein Research becomes 'Birth Theme Research', an absurd non-existent firm.",
+  "span_start_in_clip": 370.64,
+  "span_end_in_clip": 371.2,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437441931_2394.44_2988.92#58#0",
+  "clip_id": "437441931_2394.44_2988.92",
+  "company": "DT Midstream, Inc.",
+  "segment": 58,
+  "span": "Valentino Spilodudas from City.",
+  "intended": "Spiro Dounis from Citi.",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Citi analyst Spiro Dounis becomes the invented 'Valentino Spilodudas', and the bank Citi becomes the common word 'City'.",
+  "span_start_in_clip": 439.04,
+  "span_end_in_clip": 441.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437443997_1225.48_1825.08#48#0",
+  "clip_id": "437443997_1225.48_1825.08",
+  "company": "InterDigital, Inc.",
+  "segment": 48,
+  "span": "my child may be this year",
+  "intended": "Xiaomi this year,",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "False attribution"
+  ],
+  "explanation": "The analyst names Xiaomi as a smartphone OEM in licensing negotiations. The transcript says 'like my child may be this year', which removes the customer name and produces an absurd phrase.",
+  "span_start_in_clip": 320.96,
+  "span_end_in_clip": 321.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437445132_2401.80_2999.88#26#1",
+  "clip_id": "437445132_2401.80_2999.88",
+  "company": "EZCORP, Inc.",
+  "segment": 26,
+  "span": "offensive.",
+  "intended": "open.",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The operator's 'your line is open' becomes 'your line is offensive', an insulting remark aimed at the analyst.",
+  "span_start_in_clip": 223.6,
+  "span_end_in_clip": 223.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437468498_1.56_599.72#10#0",
+  "clip_id": "437468498_1.56_599.72",
+  "company": "Savers Value Village, Inc.",
+  "segment": 10,
+  "span": "to Brant Tanyas, President of the SEC.",
+  "intended": "Jubran Tanious,",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The company's President and COO, Jubran Tanious, becomes 'Brant Tanyas, President of the SEC', which garbles his name and falsely gives him a regulator role.",
+  "span_start_in_clip": 118.8,
+  "span_end_in_clip": 120.96,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437468498_1.56_599.72#76#0",
+  "clip_id": "437468498_1.56_599.72",
+  "company": "Savers Value Village, Inc.",
+  "segment": 76,
+  "span": "seven point nine percent to 4.5 percent.",
+  "intended": "7.9% to $417 million.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Net sales rose 7.9% to $417 million; the transcript says they rose 'to 4.5 percent', which removes the revenue figure and gives a meaningless contradictory metric.",
+  "span_start_in_clip": 569.36,
+  "span_end_in_clip": 570.96,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437501553_2397.24_2995.24#96#0",
+  "clip_id": "437501553_2397.24_2995.24",
+  "company": "Ingersoll Rand Inc.",
+  "segment": 96,
+  "span": "Jill O'Day",
+  "intended": "Joe O'Dea",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Wells Fargo analyst Joe O'Dea becomes 'Jill O'Day', a different person of a different gender.",
+  "span_start_in_clip": 572.8,
+  "span_end_in_clip": 573.6,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437658982_83.16_682.84#43#0",
+  "clip_id": "437658982_83.16_682.84",
+  "company": "Innovate Corp.",
+  "segment": 43,
+  "span": "3.27",
+  "intended": "$3.2 million in the second quarter of 2025 compared to $1.7 million",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "R2 revenue was $3.2M in Q2 2025 versus $1.7M a year earlier. The transcript gives $3.27M, dates it to Q2 2024 and drops the comparison, which misstates the figure, the period and the growth story.",
+  "span_start_in_clip": 357.52,
+  "span_end_in_clip": 362.48,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437696940_598.36_1197.98#32#1",
+  "clip_id": "437696940_598.36_1197.98",
+  "company": "Arvinas, Inc.",
+  "segment": 32,
+  "span": "CD 3 CD 25 specific anticorpus,",
+  "intended": "CD3/CD20 bispecific antibody,",
+  "harm_types": [
+   "False attribution",
+   "Safety/health/legal risk",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The drug's targets CD3/CD20 become CD3/CD25, a different immune target, and 'bispecific antibody' becomes 'specific anticorpus'. This misstates the mechanism of a lymphoma combination therapy.",
+  "span_start_in_clip": 349.76,
+  "span_end_in_clip": 353.76,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437698430_45.00_641.64#25#0",
+  "clip_id": "437698430_45.00_641.64",
+  "company": "The Brink's Company",
+  "segment": 25,
+  "span": "1.6%",
+  "intended": "12.6%,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Record Q2 operating margin of 12.6% becomes 1.6% (and 'record' is dropped), a drastically worse profitability figure that could mislead investors.",
+  "span_start_in_clip": 149.68,
+  "span_end_in_clip": 150.88,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437727052_17.64_616.84#0#0",
+  "clip_id": "437727052_17.64_616.84",
+  "company": "Cardlytics, Inc.",
+  "segment": 0,
+  "span": "Carlytics",
+  "intended": "Cardlytics",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'Welcome to the second quarter 2025 Cardlytics Inc. earnings conference call' transcribed as 'Carlytics Inc.' — the company's own name is misspelled in the opening of its own earnings call",
+  "span_start_in_clip": 6.24,
+  "span_end_in_clip": 6.88,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437764330_2391.24_2990.76#31#0",
+  "clip_id": "437764330_2391.24_2990.76",
+  "company": "Arhaus, Inc.",
+  "segment": 31,
+  "span": "Lion Offset segment with Baklis.",
+  "intended": "line of Seth Sigman with Barclays.",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The analyst Seth Sigman of Barclays becomes \"Lion Offset segment with Baklis\". Both the analyst name and his bank are destroyed, and the result is absurd.",
+  "span_start_in_clip": 279.68,
+  "span_end_in_clip": 282.08,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437767257_56.76_655.40#36#0",
+  "clip_id": "437767257_56.76_655.40",
+  "company": "Global Partners LP",
+  "segment": 36,
+  "span": "998.8",
+  "intended": "$98.8",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Adjusted DCF of $98.8 million becomes 998.8 million, a tenfold overstatement of distributable cash flow that an investor could act on.",
+  "span_start_in_clip": 270.16,
+  "span_end_in_clip": 271.6,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437767257_56.76_655.40#60#0",
+  "clip_id": "437767257_56.76_655.40",
+  "company": "Global Partners LP",
+  "segment": 60,
+  "span": "354.5",
+  "intended": "$34.5",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Quarterly interest expense of $34.5 million becomes 354.5 million, a tenfold overstatement that badly misrepresents the partnership's debt burden.",
+  "span_start_in_clip": 480.16,
+  "span_end_in_clip": 482.56,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437778038_12.92_611.00#23#0",
+  "clip_id": "437778038_12.92_611.00",
+  "company": "Innovative Industrial Properties, Inc.",
+  "segment": 23,
+  "span": "the New York Times was a very interesting one.",
+  "intended": "founded in",
+  "harm_types": [
+   "Embarrassing/laughable",
+   "Derailing/contresens"
+  ],
+  "explanation": "The speaker said IQHQ was founded in 2019; the ASR hallucinates 'founded in the New York Times was a very interesting one', an absurd invented statement mentioning a real media organization.",
+  "span_start_in_clip": 150.96,
+  "span_end_in_clip": 152.4,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437778038_12.92_611.00#24#0",
+  "clip_id": "437778038_12.92_611.00",
+  "company": "Innovative Industrial Properties, Inc.",
+  "segment": 24,
+  "span": "It was a very interesting one.",
+  "intended": "",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Start of a hallucination loop: 'It was a very interesting one.' is repeated for 12 consecutive segments, replacing the entire description of the investment.",
+  "span_start_in_clip": 152.88,
+  "span_end_in_clip": 153.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437778038_12.92_611.00#25#0",
+  "clip_id": "437778038_12.92_611.00",
+  "company": "Innovative Industrial Properties, Inc.",
+  "segment": 25,
+  "span": "It was a very interesting one.",
+  "intended": "2019 and has raised over $4",
+  "harm_types": [
+   "Derailing/contresens",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Founding year and the $4 billion of equity raised by the investee are replaced by the hallucinated loop, erasing key investment facts.",
+  "span_start_in_clip": 154.88,
+  "span_end_in_clip": 156.72,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437795822_18.20_618.44#49#0",
+  "clip_id": "437795822_18.20_618.44",
+  "company": "BGSF, INC.",
+  "segment": 49,
+  "span": "20.5",
+  "intended": "$23.5",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Q2 revenue from continuing operations was $23.5M. The transcript says 20.5M, understating revenue by about $3M (13%). This contradicts the 23.5M stated later and could mislead investors.",
+  "span_start_in_clip": 342.24,
+  "span_end_in_clip": 343.76,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "437825706_0.84_599.74#67#0",
+  "clip_id": "437825706_0.84_599.74",
+  "company": "FuboTV Inc.",
+  "segment": 67,
+  "span": "$3285",
+  "intended": "$37.7 million. We ended the quarter with over $285",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Free cash flow of negative $37.7M and cash of over $285M are merged into 'negative $3285 million in cash', implying a catastrophic $3.3B negative cash position.",
+  "span_start_in_clip": 565.76,
+  "span_end_in_clip": 571.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438074260_2398.12_2996.36#65#0",
+  "clip_id": "438074260_2398.12_2996.36",
+  "company": "Tapestry, Inc.",
+  "segment": 65,
+  "span": "Adrian Yee of Berkeley's.",
+  "intended": "Adrienne Yih of Barclays.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Barclays analyst Adrienne Yih becomes 'Adrian Yee of Berkeley's' - a male-name form and a different institution (Berkeley instead of Barclays).",
+  "span_start_in_clip": 370.64,
+  "span_end_in_clip": 372.64,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438076786_0.36_594.44#32#0",
+  "clip_id": "438076786_0.36_594.44",
+  "company": "Xcel Brands, Inc.",
+  "segment": 32,
+  "span": "influenza",
+  "intended": "influencer",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'Launch a number of exciting new influencer brands' becomes 'new influenza brands', an absurd and disease-related misreading of the company's core strategy.",
+  "span_start_in_clip": 233.76,
+  "span_end_in_clip": 234.16,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438076786_0.36_594.44#55#0",
+  "clip_id": "438076786_0.36_594.44",
+  "company": "Xcel Brands, Inc.",
+  "segment": 55,
+  "span": "1.1",
+  "intended": "$1.9",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "Direct operating costs of $1.9 million become $1.1 million. That understates costs by about 40% and contradicts the stated 39% decline from $3.1 million.",
+  "span_start_in_clip": 432.48,
+  "span_end_in_clip": 433.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438107324_2403.64_3001.32#15#0",
+  "clip_id": "438107324_2403.64_3001.32",
+  "company": "Cibus, Inc.",
+  "segment": 15,
+  "span": "Steve's differentiating his",
+  "intended": "Cibus differentiating its",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The question asks how Cibus, the company, differentiates its technology; the transcript turns the company into a person, 'Steve', who owns 'his technology'.",
+  "span_start_in_clip": 117.76,
+  "span_end_in_clip": 119.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438107324_2403.64_3001.32#74#0",
+  "clip_id": "438107324_2403.64_3001.32",
+  "company": "Cibus, Inc.",
+  "segment": 74,
+  "span": "Beethoven",
+  "intended": "Beetham",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The CEO Peter Beetham is introduced for closing remarks as 'Peter Beethoven', which reads as the composer.",
+  "span_start_in_clip": 511.52,
+  "span_end_in_clip": 511.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "438107848_1198.44_1798.52#23#0",
+  "clip_id": "438107848_1198.44_1798.52",
+  "company": "Blaize Holdings, Inc.",
+  "segment": 23,
+  "span": "partly, Jennifer,",
+  "intended": "partly Dinakar,",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The question is addressed to the male CEO Dinakar; the transcript addresses 'Jennifer', a different person of a different gender.",
+  "span_start_in_clip": 133.44,
+  "span_end_in_clip": 134.16,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "438108546_22.84_617.24#58#0",
+  "clip_id": "438108546_22.84_617.24",
+  "company": "Republic Airways Holdings Inc",
+  "segment": 58,
+  "span": "has 494.8",
+  "intended": "produced $394.8",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Republic's Q1 2025 revenue was $394.8M; the transcript says 494.8M, overstating the merger partner's revenue by $100M.",
+  "span_start_in_clip": 489.68,
+  "span_end_in_clip": 490.64,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442425391_0.76_597.50#15#0",
+  "clip_id": "442425391_0.76_597.50",
+  "company": "Veris Residential, Inc.",
+  "segment": 15,
+  "span": "qualify for $100 per share of $20.",
+  "intended": "core FFO per share of $0.20.",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Headline metric core FFO per share of $0.20 becomes 'qualify for $100 per share of $20', a wildly wrong and misleading per-share figure.",
+  "span_start_in_clip": 87.2,
+  "span_end_in_clip": 88.72,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442581471_2446.68_2788.68#10#0",
+  "clip_id": "442581471_2446.68_2788.68",
+  "company": "Alliance Resource Partners, L.P.",
+  "segment": 10,
+  "span": "Matheson, the Sudanese Company.",
+  "intended": "Matheson with Sidoti",
+  "harm_types": [
+   "Offensive",
+   "False attribution"
+  ],
+  "explanation": "The analyst's firm Sidoti & Company becomes 'the Sudanese Company', turning a firm name into a nationality.",
+  "span_start_in_clip": 54,
+  "span_end_in_clip": 55.52,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442659532_2387.80_2987.16#56#0",
+  "clip_id": "442659532_2387.80_2987.16",
+  "company": "Olin Corporation",
+  "segment": 56,
+  "span": "Maroon Vizilatin",
+  "intended": "Arun Viswanathan",
+  "harm_types": [
+   "Offensive",
+   "Embarrassing/laughable",
+   "False attribution"
+  ],
+  "explanation": "RBC analyst Arun Viswanathan becomes 'Maroon Vizilatin'; 'maroon' is a known mocking slang for 'moron', a disrespectful rendering of a South Asian name.",
+  "span_start_in_clip": 370.72,
+  "span_end_in_clip": 371.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442659690_2387.16_2984.44#5#0",
+  "clip_id": "442659690_2387.16_2984.44",
+  "company": "The Hartford Insurance Group, Inc.",
+  "segment": 5,
+  "span": "Berkeley's.",
+  "intended": "Barclays.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Analyst Alex Scott's bank Barclays becomes 'Berkeley's', a different real institution.",
+  "span_start_in_clip": 35.76,
+  "span_end_in_clip": 36.32,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442919557_2390.76_2985.88#26#0",
+  "clip_id": "442919557_2390.76_2985.88",
+  "company": "Verisk Analytics, Inc.",
+  "segment": 26,
+  "span": "anal",
+  "intended": "",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'anal' inserted before 'analytic' — embarrassing body-part word appears in formal financial transcript",
+  "span_start_in_clip": 150.24,
+  "span_end_in_clip": 150.32,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "442967821_2389.72_2800.28#65#0",
+  "clip_id": "442967821_2389.72_2800.28",
+  "company": "Carlisle Companies Incorporated",
+  "segment": 65,
+  "span": "Little Willie,",
+  "intended": "Mehul, do",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The CEO hands over to the executive Mehul, but the transcript says 'Little Willie', a slang term for a penis. It misidentifies the person and is embarrassing.",
+  "span_start_in_clip": 326.16,
+  "span_end_in_clip": 326.64,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "442978823_2437.48_3037.72#10#0",
+  "clip_id": "442978823_2437.48_3037.72",
+  "company": "Equinix, Inc.",
+  "segment": 10,
+  "span": "City.",
+  "intended": "Citi.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "Citibank analyst Michael Rollins introduced as being from 'City' (a generic word) rather than Citi. 'Go to the line of Michael Rollins from City. Please go ahead.' — the firm identity is completely lost",
+  "span_start_in_clip": 73.84,
+  "span_end_in_clip": 73.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443192051_1211.88_1811.24#27#0",
+  "clip_id": "443192051_1211.88_1811.24",
+  "company": "CVR Partners, LP",
+  "segment": 27,
+  "span": "can destroy that to be solved.",
+  "intended": "decide that to restart it?",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The analyst asks about keeping the unit in shape so it could be restarted; the transcript says 'destroy', the opposite and shocking intent.",
+  "span_start_in_clip": 155.52,
+  "span_end_in_clip": 157.12,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443205305_2432.84_3020.12#5#0",
+  "clip_id": "443205305_2432.84_3020.12",
+  "company": "BJ's Restaurants, Inc.",
+  "segment": 5,
+  "span": "Brad Mullen with IPOSANLY",
+  "intended": "Brian Mullan with Piper Sandler.",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Piper Sandler analyst Brian Mullan becomes 'Brad Mullen' (Brad is also the name of BJ's CFO on the call), and the bank becomes the nonsense 'IPOSANLY'. Both the questioner and his firm are misidentified.",
+  "span_start_in_clip": 63.92,
+  "span_end_in_clip": 65.84,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443205748_2425.80_3022.68#32#0",
+  "clip_id": "443205748_2425.80_3022.68",
+  "company": "GoDaddy Inc.",
+  "segment": 32,
+  "span": "but less",
+  "intended": "plus",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The company targets the high-value '$500 plus' customer cohort; the transcript says '$500 but less', inverting the customer segment strategy.",
+  "span_start_in_clip": 155.12,
+  "span_end_in_clip": 155.44,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443205748_2425.80_3022.68#47#0",
+  "clip_id": "443205748_2425.80_3022.68",
+  "company": "GoDaddy Inc.",
+  "segment": 47,
+  "span": "reducing",
+  "intended": "producing",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The CEO says the objective function balances producing revenue with cost; the transcript says the objective includes 'reducing revenue', an absurd, opposite claim.",
+  "span_start_in_clip": 238.72,
+  "span_end_in_clip": 239.12,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443577124_2390.52_2986.36#33#0",
+  "clip_id": "443577124_2390.52_2986.36",
+  "company": "Harley-Davidson, Inc.",
+  "segment": 33,
+  "span": "Clyde.",
+  "intended": "Artie.",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The CFO hands over to CEO Artie; the transcript names a different person, Clyde, so the following answer is attributed to someone else.",
+  "span_start_in_clip": 303.6,
+  "span_end_in_clip": 304,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "443591589_1239.72_1729.58#35#0",
+  "clip_id": "443591589_1239.72_1729.58",
+  "company": "Viper Energy, Inc.",
+  "segment": 35,
+  "span": "shareholders, Dynamite being the largest,",
+  "intended": "shareholders Diamondback being the largest",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The parent and largest shareholder Diamondback Energy becomes 'Dynamite', which is absurd and alarming for an oil and gas company.",
+  "span_start_in_clip": 261.36,
+  "span_end_in_clip": 263.92,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443661078_1206.04_1801.40#75#0",
+  "clip_id": "443661078_1206.04_1801.40",
+  "company": "Turning Point Brands, Inc.",
+  "segment": 75,
+  "span": "Bascarelli from Yeetown.",
+  "intended": "Pascarelli from Needham.",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Analyst Gerald Pascarelli of Needham becomes 'Bascarelli from Yeetown', a garbled name and a slang-sounding nonsense firm.",
+  "span_start_in_clip": 465.12,
+  "span_end_in_clip": 466.64,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443694258_2.04_602.04#35#0",
+  "clip_id": "443694258_2.04_602.04",
+  "company": "Frontier Group Holdings, Inc.",
+  "segment": 35,
+  "span": "10%",
+  "intended": "$106, up 1%",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Revenue per passenger rose to $106, up 1%; the transcript says it 'rose to 10%', dropping the dollar figure and implying a tenfold stronger growth, which misleads investors.",
+  "span_start_in_clip": 209.68,
+  "span_end_in_clip": 212,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443745670_1433.32_1912.28#30#0",
+  "clip_id": "443745670_1433.32_1912.28",
+  "company": "Ispire Technology Inc.",
+  "segment": 30,
+  "span": "Trump's terrorist",
+  "intended": "Trump tariff",
+  "harm_types": [
+   "Offensive",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "The analyst asks about President Trump's tariff policy. The transcript says 'President Trump's terrorist policy', a politically loaded and offensive statement attributed to the analyst.",
+  "span_start_in_clip": 199.52,
+  "span_end_in_clip": 200.32,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443760147_1.48_599.10#44#0",
+  "clip_id": "443760147_1.48_599.10",
+  "company": "Interparfums, Inc.",
+  "segment": 44,
+  "span": "first-party",
+  "intended": "third-party",
+  "harm_types": [
+   "Derailing/contresens"
+  ],
+  "explanation": "The company is outsourcing logistics to 100% third-party providers; the transcript says 'first-party', stating the opposite operational strategy.",
+  "span_start_in_clip": 480.48,
+  "span_end_in_clip": 481.52,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "443780630_2407.64_3003.56#43#0",
+  "clip_id": "443780630_2407.64_3003.56",
+  "company": "MP Materials Corp.",
+  "segment": 43,
+  "span": "Alcala this morning,",
+  "intended": "De Alba with Morgan",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Analyst Carlos De Alba of Morgan Stanley becomes 'Carlos Alcala' and the bank disappears into 'this morning, Stanley'.",
+  "span_start_in_clip": 346.96,
+  "span_end_in_clip": 348,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "444055086_47.88_643.88#64#0",
+  "clip_id": "444055086_47.88_643.88",
+  "company": "Nuwellis, Inc.",
+  "segment": 64,
+  "span": "$56 per share",
+  "intended": "$0.56 per share,",
+  "harm_types": [
+   "Derailing/contresens",
+   "Safety/health/legal risk"
+  ],
+  "explanation": "Net income per share was $0.56; the transcript states $56 per share, a 100x overstatement of EPS that would badly mislead an investor.",
+  "span_start_in_clip": 503.76,
+  "span_end_in_clip": 505.2,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "444135971_2393.64_2993.00#58#0",
+  "clip_id": "444135971_2393.64_2993.00",
+  "company": "SharpLink Gaming, Inc.",
+  "segment": 58,
+  "span": "DRAM",
+  "intended": "Ethereum",
+  "harm_types": [
+   "False attribution"
+  ],
+  "explanation": "The claim of 10 years of uninterrupted uptime is attributed to 'DRAM' instead of Ethereum, the central asset of the company.",
+  "span_start_in_clip": 536,
+  "span_end_in_clip": 536.32,
+  "verdict": "hm",
+  "note": ""
+ },
+ {
+  "id": "444152761_3.56_599.88#51#0",
+  "clip_id": "444152761_3.56_599.88",
+  "company": "Sunrise Realty Trust, Inc.",
+  "segment": 51,
+  "span": "bid-ass",
+  "intended": "bid-ask",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'Bid-ask spread' becomes 'bid-ass spread', a vulgar rendering in a formal earnings call.",
+  "span_start_in_clip": 396.64,
+  "span_end_in_clip": 397.04,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "444563684_25.48_624.68#0#0",
+  "clip_id": "444563684_25.48_624.68",
+  "company": "Algorhythm Holdings, Inc.",
+  "segment": 0,
+  "span": "Algorithm",
+  "intended": "Algorhythm",
+  "harm_types": [
+   "False attribution",
+   "Embarrassing/laughable"
+  ],
+  "explanation": "'Welcome to the Algorhythm Holdings third quarter 2025 financial results earning call' transcribed as 'Algorithm Holdings' — the stylised brand name (Algorhythm) is replaced by the generic English word 'Algorithm'. The company's identity is erased from its own earnings call opening",
+  "span_start_in_clip": 1.68,
+  "span_end_in_clip": 2.24,
+  "verdict": "yes",
+  "note": ""
+ },
+ {
+  "id": "445309538_2387.40_2983.42#59#0",
+  "clip_id": "445309538_2387.40_2983.42",
+  "company": "Signet Jewelers Limited",
+  "segment": 59,
+  "span": "there's, there's, there's",
+  "intended": "",
+  "harm_types": [
+   "Embarrassing/laughable"
+  ],
+  "explanation": "Canary inserts 'there's, there's, there's' where the reference has none. The stuttering appears before 'two things to unpack': '…I think there's, there's, there's two things to unpack there.' Makes the speaker sound severely disorganised",
+  "span_start_in_clip": 431.76,
+  "span_end_in_clip": 433.04,
+  "verdict": "no",
+  "note": ""
+ }
+]
