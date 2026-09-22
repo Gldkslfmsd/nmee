@@ -7,7 +7,8 @@ block of custom_nmee_demo.json. Use --template to take the "info" block from ano
 - Each item: source = audio clip + gold transcript (+ reference translation), target = one text per
   system from "targets", `instructions` = the suggested error(s) per target: span, intended meaning,
   harm types, confidence, likely error source and explanation.
-- Suggested spans are pre-filled (severity --prefill-severity, default "major" = red); --no-prefill disables it.
+- Suggested spans are not pre-highlighted by default; --prefill highlights them (severity --prefill-severity,
+  default "major" = red).
 - --confidence high|low|all keeps only targets marked harmful (high) or borderline (low), or both.
 
 annotations.jsonl: one line per segment, in the agreed format:
@@ -65,8 +66,15 @@ def load_refs(yaml_path, cs_path, en_path):
     return refs
 
 
-def overlapping(refs, start, end, min_overlap):
-    out = [r for r in refs if min(end, r[1]) - max(start, r[0]) > min_overlap]
+def overlapping(refs, start, end, min_overlap, min_ratio=0.0):
+    """Reference segments overlapping [start, end] by more than min_overlap seconds and, if min_ratio > 0,
+    covering at least min_ratio of the clip or of the reference segment itself."""
+    def ok(r):
+        ov = min(end, r[1]) - max(start, r[0])
+        if ov <= min_overlap:
+            return False
+        return min_ratio <= 0 or ov >= min_ratio * (end - start) or ov >= min_ratio * (r[1] - r[0])
+    out = [r for r in refs if ok(r)]
     return out or [min(refs, key=lambda r: abs((r[0] + r[1]) / 2 - (start + end) / 2))]
 
 
@@ -99,7 +107,11 @@ def main():
     ap.add_argument("--ref-yaml", help="re-align gold/reference by time (needs timestamps)")
     ap.add_argument("--ref-cs", help="gold transcript aligned with --ref-yaml")
     ap.add_argument("--ref-en", help="reference translation aligned with --ref-yaml")
-    ap.add_argument("--min-overlap", type=float, default=0.1)
+    ap.add_argument("--min-overlap", type=float, default=0.1,
+                    help="seconds a reference segment must overlap the clip (default 0.1)")
+    ap.add_argument("--min-overlap-ratio", type=float, default=0.3,
+                    help="...and the overlap must cover this share of the clip or of the reference segment "
+                         "(default 0.3; 0 = any overlap)")
     ap.add_argument("--no-gold", action="store_true", help="don't show the gold transcript")
     ap.add_argument("--no-reference", action="store_true", help="don't show the reference translation")
     ap.add_argument("--show-asr", action="store_true", help="show the ASR text of the segment")
@@ -107,7 +119,7 @@ def main():
                     help="high = only targets marked harmful, low = only borderline ones (default: all)")
     ap.add_argument("--template", help="campaign JSON whose \"info\" block is copied verbatim "
                     "(e.g. custom_nmee_demo.json; default: the built-in copy of that block)")
-    ap.add_argument("--no-prefill", action="store_true", help="don't pre-highlight suggested spans")
+    ap.add_argument("--prefill", action="store_true", help="pre-highlight the suggested spans (default: off)")
     ap.add_argument("--prefill-severity", default="major",
                     help="severity stored in pre-filled spans (the protocol has no severity buttons; default: major)")
     ap.add_argument("--users", type=int, default=4)
@@ -172,7 +184,7 @@ def main():
                 if t.get("reference"):
                     references.setdefault((t.get("tgt_lan"), t["reference"]), None)
             if refs is not None and stem in refs and start is not None:
-                ov = overlapping(refs[stem], start, end, args.min_overlap)
+                ov = overlapping(refs[stem], start, end, args.min_overlap, args.min_overlap_ratio)
                 gold = " ".join(r[2] for r in ov)
                 ref_en = " ".join(r[3] for r in ov if r[3])
                 references = {("en", ref_en): None} if ref_en else {}
@@ -208,7 +220,7 @@ def main():
                 "segment_filename": seg_file, "orig_start": start, "orig_end": end,
                 "asr": rec.get("asr"), "gold_transcript": gold, "targets": rec["targets"],
             }
-            if spans and not args.no_prefill:
+            if spans and args.prefill:
                 item["error_spans"] = dict(spans)
             doc.append(item)
             n_items += 1

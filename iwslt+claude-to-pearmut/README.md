@@ -57,10 +57,10 @@ same `system` and `text`. Outputs of different systems or target languages are a
 | `system` | str | yes | System ID, `<end-to-end>` or `<asr>+<mt>`, e.g. `whisper+gemma` |
 | `text` | str | yes | The system's output for the segment |
 | `reference` | str/null | no | Human reference translation |
-| `span` | str | yes | Erroneous text, exactly `text[span_start:span_end]` |
+| `span` | str | no | Erroneous text, exactly `text[span_start:span_end]` |
 | `span_start`, `span_end` | int | yes | Character offsets in `text` (end exclusive) |
-| `intended` | str | yes | What the span should have said |
-| `harm_types` | list[str] | yes | One or more of: `False attribution`, `Offensive`, `Embarrassing or laughable`, `Derailing or contresens`, `Safety, health or legal risk`, `Other` |
+| `intended` | str | no | What the span should have said |
+| `harm_types` | list[str] | no | One or more of: `False attribution`, `Offensive`, `Embarrassing or laughable`, `Derailing or contresens`, `Safety, health or legal risk`, `Other` |
 | `confidence` | str | no | Confidence of the (LLM) marker: `harmful` (high) or `borderline` (low) |
 | `borderline` | bool | no | `true` iff `confidence == "borderline"` |
 | `explanation` | str | no | Why the error is harmful |

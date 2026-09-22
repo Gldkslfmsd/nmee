@@ -1,0 +1,3 @@
+[submodule "segment_audio/third_party/vecalign"]
+	path = segment_audio/third_party/vecalign
+	url = https://github.com/thompsonb/vecalign.git
