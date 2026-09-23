@@ -7,7 +7,7 @@
 #   - ../../earnings25_raw/earnings-25/testset-segmented/audio  (3.1 GB), or the pre-cut
 #     clips from ../download-large-data.sh
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."   # the scripts live in scripts/, everything else is relative to here
 
 DSPY=../dspy-search-for-errors
 WORK=${WORK:-./work}
@@ -32,27 +32,27 @@ python "$DSPY/30-merge-annotations.py" \
     --csv-output "$WORK/35-merged-annotations.csv"
 
 # 2. put both sets on the Canary English segment grid
-python merge_annotations.py \
-    --asr-harm annotations.jsonl \
+python scripts/merge_annotations.py \
+    --asr-harm annotations/annotations.jsonl \
     --divergencies "$WORK/35-merged-annotations.jsonl" \
     --canary-dir "$CANARY" \
     --index ../harm_annotation_eng_asr/_index.json \
     --min-models "$MIN_MODELS" \
-    -o merged_annotations.jsonl
+    -o annotations/merged_annotations.jsonl
 
 # 3. clips for every segment in the merged set (skips unchanged ones)
-python cut_clips.py merged_annotations.jsonl clips --audio-dir "$AUDIO"
+python scripts/cut_clips.py annotations/merged_annotations.jsonl clips --audio-dir "$AUDIO"
 
 # 4. one campaign per annotator language pair: English plus one target language
 for L in en en,de en,cs en,pl en,sk; do
     id="earnings25_merged_${L//,/}"
-    python make_pearmut_campaign.py merged_annotations.jsonl --clips-dir clips \
+    python scripts/make_pearmut_campaign.py annotations/merged_annotations.jsonl --clips-dir clips \
         --lang "$L" --min-models "$MIN_MODELS" \
         --shuffle off --show-model-names on --slim \
         --campaign-id "$id" \
         --copy-assets "${PEARMUT_ROOT:-.}/data/assets" \
-        -o "campaign_${id#earnings25_merged_}.json"
+        -o "campaigns/merged_${id#earnings25_merged_}.json"
 done
 
 echo
-echo "now load them into pearmut:  pearmut add -o campaign_*.json   then:  pearmut run"
+echo "now load them into pearmut:  pearmut add -o campaigns/*.json   then:  pearmut run"

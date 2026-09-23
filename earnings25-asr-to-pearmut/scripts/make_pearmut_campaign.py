@@ -18,9 +18,10 @@ Differences from the IWSLT version, beyond dropping the yaml/reference re-alignm
 This is ASR-only: `tgt` is the English Canary transcript itself, and every error_source is "ASR".
 
 Usage:
-    python make_pearmut_campaign.py annotations.jsonl --clips-dir clips \
-        --severity high,medium --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
-    pearmut add -o campaign.json
+    python scripts/make_pearmut_campaign.py annotations/annotations.jsonl --clips-dir clips \
+        --severity high,medium --copy-assets "${PEARMUT_ROOT:-.}/data/assets" \
+        -o campaigns/asr_harm_en.json
+    pearmut add -o campaigns/asr_harm_en.json
 """
 import argparse
 import html
@@ -30,7 +31,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-DEFAULT_TEMPLATE = Path(__file__).resolve().parent.parent / "custom_nmee_demo.json"
+DEFAULT_TEMPLATE = Path(__file__).resolve().parents[2] / "custom_nmee_demo.json"
 
 
 def esc(s):

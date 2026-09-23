@@ -11,7 +11,7 @@ Writes OUT_DIR/<clip_id>/<clip_id>.<NNNN>.mp3, matching the `segment_filename` t
 normalize_annotations.py puts in the records.
 
 Usage:
-    python cut_clips.py annotations.jsonl clips \
+    python scripts/cut_clips.py annotations/annotations.jsonl clips \
         --audio-dir ../../earnings25_raw/earnings-25/testset-segmented/audio
 """
 import argparse

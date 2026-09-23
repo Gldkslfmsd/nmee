@@ -30,12 +30,12 @@ pre-highlighted. The three divergence models are collapsed per (language, span),
 them reported it is kept in `num_models_reporting`.
 
 Usage:
-    python merge_annotations.py \
-        --asr-harm annotations.jsonl \
-        --divergencies ../dspy-search-for-errors/35-merged-annotations.jsonl \
+    python scripts/merge_annotations.py \
+        --asr-harm annotations/annotations.jsonl \
+        --divergencies work/35-merged-annotations.jsonl \
         --canary-dir ../../results/canary/en \
         --index ../harm_annotation_eng_asr/_index.json \
-        --min-models 2 -o merged_annotations.jsonl
+        --min-models 2 -o annotations/merged_annotations.jsonl
 """
 import argparse
 import json
