@@ -1,33 +1,25 @@
 #!/usr/bin/env python3
-"""Build and extend a sentence-level, multi-system JSONL for one document.
+"""Build and extend a sentence-level, multi-system JSONL.
 
-Iteration 0 -- create: read the sentence segmentation made by asr_sentences.py
-(one sentence per line: {"segment", "start", "end", "words"}) and turn it into the aligned format.
-Its text becomes the first system (--name, e.g. canary_asr).
+The JSONL may hold one document or many merged together (each line carries its "document"); documents
+are handled separately but read and written as one file.
 
-Iteration 1..n -- add: read the output of this script and add one more system (--add FILE), split into
-the existing sentences by one of three methods (--align):
+Create (once per document): read the sentence segmentation made by asr_sentences.py
+(one sentence per line: {"segment", "start", "end", "words"}). Its text becomes the first system
+(--name, e.g. canary_asr).
 
-  mwer      Same-language systems (gold transcript vs. ASR, reference vs. MT, ASR vs. ASR).
-            The added text is re-segmented to the sentences of --align-to (a system in the same
-            language) with mweralign (https://github.com/mjpost/mweralign; Post & Hoang 2025,
-            AS-WER of Matusov et al. 2005), using its SentencePiece tokenization (--mwer-tokenizer,
-            default spm32k). Needs no timestamps. Used from the git submodule third_party/mweralign
-            (see setup_aligners.sh), or from an installed mweralign package.
-  vecalign  Other languages (translations). The added text is split into sentences (Moses), then
-            aligned to the sentences of --align-to (default: the segmentation system) with the original
-            Vecalign (Thompson & Koehn 2019; https://github.com/thompsonb/vecalign), called in-process
-            with multilingual sentence embeddings (LaBSE by default, --embed-model) of all overlaps
-            (concatenations of up to --max-size sentences). Vecalign itself only groups whole
-            sentences; when one target sentence spans several source sentences, this script splits it
-            (see "split" below). Vecalign is used from the git submodule third_party/vecalign (see
-            setup_aligners.sh), or from an installed vecalign package. Also needs sentence-transformers,
-            numpy, and mosestokenizer or sentence-splitter.
-  time      Word timestamps only: every word goes to the sentence it overlaps most in time.
+Add (once per system): read the output of this script and add one more system (--add), split into the
+existing sentences by one of three methods (--align mwer | vecalign | time; see alignments.py).
+
+--add takes one file, or many: several files, a glob, or a directory. All of them are handled in this
+one process, so the LaBSE / SentencePiece models are loaded once -- the point with a few hundred
+documents. Each --add file is paired with a document of --input by its name (DOC.jsonl, DOC.txt,
+DOC.<lan>.*); a file whose document is not in --input is an error, and documents of --input without an
+--add file keep their systems unchanged (with a warning).
 
 --add accepts Canary-style JSONL ("words" with "start"/"end" per line), word-per-line JSONL, a NeMo
-hypothesis JSON, or plain text (e.g. a gold transcript or reference, one or more lines; no timestamps,
-so not usable with --align time).
+hypothesis JSON, or plain text (e.g. a gold transcript or reference; no timestamps, so not usable with
+--align time).
 
 Output: one sentence per line:
   {"document", "dataset", "src_language",
@@ -39,20 +31,21 @@ Output: one sentence per line:
    "alignment": {"canary_mt_cs": "vecalign 1:1", ...},  # how each added system was aligned here
    "words": {"canary_asr": [{"word", "start", "end"}, ...], ...}}   # only with --with-words
 
-Alignment labels: "mwer", "time", or "vecalign a:b" where a source sentences were aligned to b target
-sentences; "split" means the target sentence(s) of an n:m unit were divided among the n source sentences
-(existing sentences are never merged): by default at the word boundaries where the pieces' embeddings
-match the source sentences best (--split-method embed), or by time / proportionally (--split-method prior); "+ins" means unaligned target sentences (0:1) were
-attached to this sentence; "1:0" means nothing was aligned to this sentence.
+Alignment labels: "mwer", "time", or "vecalign a:b" where a existing sentences were aligned to b added
+sentences; "split" means the added sentence(s) of an n:m unit were divided among the n existing
+sentences (existing sentences are never merged); "+ins" means unaligned added sentences were attached
+to this sentence; "1:0" means nothing was aligned to this sentence.
 
 Usage:
-    # 0) create from the sentence segmentation
-    python add_and_align_sentences.py --input sentences/DOC.en.jsonl --output aligned/DOC.jsonl \
+    # create
+    python add_and_align_sentences.py --input sentences/DOC.en.jsonl --output aligned/DOC.jsonl \\
         --dataset earnings25 --src-language en --name canary_asr --lan en --audio-dir segments
-    # 1..n) add one system per call; --output may be the same file as --input
-    python add_and_align_sentences.py --input aligned/DOC.jsonl --output aligned/DOC.jsonl \
-        --add outputs/DOC.cs.jsonl --name canary_mt_cs --lan cs --align vecalign
-    python add_and_align_sentences.py --input aligned/DOC.jsonl --output aligned/DOC.jsonl \
+    # merge the documents into one file, then add a system to all of them in one process
+    cat aligned/*.jsonl > aligned/all.jsonl
+    python add_and_align_sentences.py --input aligned/all.jsonl --output aligned/all+mt.jsonl \\
+        --add mt/cs/ --name canary_mt_cs --lan cs --align vecalign
+    # add a gold transcript or a reference (same language as the system it is aligned to)
+    python add_and_align_sentences.py --input aligned/DOC.jsonl \\
         --add gold/DOC.txt --name gold_transcript --lan en --is-human --align mwer
 
 --name, --lan and --is-human describe the system of the input sentences when creating, and the added
@@ -60,30 +53,18 @@ system when adding. Creating and adding are separate calls.
 
 Metadata arguments (--document, --dataset, --src-language, --segmented-by, --audio-dir) are optional
 when the input is already aligned: fields whose argument is given are updated, all others are kept as
-they are in the input. When creating, fields whose argument is not given are set to null (only --name
-is required). The document ID, if neither given nor already in the input, is taken from the --input
-file name: DOC.jsonl, or DOC.<lan>.jsonl where <lan> is --lan or --src-language.
+they are. When creating, fields whose argument is not given are set to null (only --name is required).
+The document ID, if neither given nor already in the input, is taken from the input file name:
+DOC.jsonl, or DOC.<lan>.jsonl where <lan> is --lan or --src-language.
 """
 import argparse
+import glob as globmod
 import json
-import math
 import sys
+import time
 from pathlib import Path
 
-# the aligners are git submodules under third_party/ (see setup_aligners.sh); an installed package of
-# the same name is used only if the submodule is not there
-THIRD_PARTY = [Path(__file__).resolve().parent / "third_party", Path("third_party")]
-
-
-def use_submodule(name, extra_dir=None):
-    """Put the submodule's copy of `name` first on sys.path, if it is present and built."""
-    roots = ([Path(extra_dir)] if extra_dir else []) + [d / name for d in THIRD_PARTY]
-    for root in roots:
-        for path in (root, root / "python"):  # vecalign: repo root; mweralign: repo/python
-            if (path / name / "__init__.py").exists():
-                sys.path.insert(0, str(path))
-                return str(path)
-    return None
+from alignments import Options, align, has_times
 
 
 # ---------------------------------------------------------------- I/O
@@ -94,8 +75,8 @@ def read_jsonl(path):
 
 
 def load_add(path):
-    """Return (words, segments): words = [{"word", "start"?, "end"?}], segments = list of word-index lists
-    (the file's own lines/segments). Plain text gives words without timestamps."""
+    """Return (words, segments): words = [{"word", "start"?, "end"?}], segments = list of word-index
+    lists (the file's own lines/segments). Plain text gives words without timestamps."""
     text = Path(path).read_text(encoding="utf-8")
     records = None
     try:
@@ -133,56 +114,20 @@ def load_add(path):
     return words, segments
 
 
-def has_times(words):
-    return bool(words) and all("start" in w and "end" in w for w in words)
-
-
 def is_aligned_format(recs):
     return bool(recs) and isinstance(recs[0].get("text"), dict) and "systems_info" in recs[0]
 
 
-# ---------------------------------------------------------------- create
+# ---------------------------------------------------------------- document ID, metadata
 
-def create(segs, args):
-    if args.name is None:
-        sys.exit("--name is required when the input is asr_sentences.py output")
-    document = args.document or doc_from_filename(args)
-    unset = [a for a in ("dataset", "src_language", "lan") if getattr(args, a) is None]
-    if unset:
-        print(f"note: not given, set to null: {', '.join('--' + a.replace('_', '-') for a in unset)}",
-              file=sys.stderr)
-    name = args.name
-    out = []
-    for i, s in enumerate(segs):
-        rec = {
-            "document": document,
-            "dataset": args.dataset,
-            "src_language": args.src_language,
-            "systems_info": {name: {"lan": args.lan, "is_human": args.is_human}},
-            "segmented_by": args.segmented_by or name,
-            "audio": None,
-            "beg": s["start"],
-            "end": s["end"],
-            "text": {name: s.get("segment", "")},
-        }
-        if args.with_words:
-            rec["words"] = {name: s.get("words", [])}
-        out.append(rec)
-    if args.audio_dir:
-        set_audio(out, args.audio_dir)
-    print(f"created {len(out)} sentences, system {name!r}", file=sys.stderr)
-    return out
-
-
-def doc_from_filename(args):
-    """Document ID from the --input file name: DOC.jsonl or DOC.<lan>.jsonl."""
-    name = Path(args.input).name
+def stem_doc(path, args):
+    """Document ID from a file name: DOC.jsonl, DOC.txt, or DOC.<lan>.* with <lan> = --lan or
+    --src-language."""
+    name = Path(path).name
     stem = name[: -len(".jsonl")] if name.endswith(".jsonl") else Path(name).stem
     for lan in (args.lan, args.src_language):
         if lan and stem.endswith(f".{lan}"):
-            stem = stem[: -len(lan) - 1]
-            break
-    print(f"note: document ID taken from the input file name: {stem!r}", file=sys.stderr)
+            return stem[: -len(lan) - 1]
     return stem
 
 
@@ -199,17 +144,49 @@ def set_audio(recs, audio_dir):
               f"(run segment_audio.py on the same sentence files)", file=sys.stderr)
 
 
-def update_metadata(recs, args):
+def create(segs, in_path, args):
+    if args.name is None:
+        sys.exit("--name is required when the input is asr_sentences.py output")
+    document = args.document or stem_doc(in_path, args)
+    if not args.document:
+        print(f"note: document ID taken from the input file name: {document!r}", file=sys.stderr)
+    unset = [a for a in ("dataset", "src_language", "lan") if getattr(args, a) is None]
+    if unset:
+        print(f"note: not given, set to null: {', '.join('--' + a.replace('_', '-') for a in unset)}",
+              file=sys.stderr)
+    out = []
+    for s in segs:
+        rec = {
+            "document": document,
+            "dataset": args.dataset,
+            "src_language": args.src_language,
+            "systems_info": {args.name: {"lan": args.lan, "is_human": args.is_human}},
+            "segmented_by": args.segmented_by or args.name,
+            "audio": None,
+            "beg": s["start"],
+            "end": s["end"],
+            "text": {args.name: s.get("segment", "")},
+        }
+        if args.with_words:
+            rec["words"] = {args.name: s.get("words", [])}
+        out.append(rec)
+    if args.audio_dir:
+        set_audio(out, args.audio_dir)
+    print(f"created {len(out)} sentences, system {args.name!r}", file=sys.stderr)
+    return out
+
+
+def update_metadata(recs, in_path, args):
     """Aligned input: update only the fields whose argument was given; keep all others."""
     changed = []
     if args.document is None and not recs[0].get("document"):
-        doc = doc_from_filename(args)
+        doc = stem_doc(in_path, args)
+        print(f"note: document ID taken from the input file name: {doc!r}", file=sys.stderr)
         for r in recs:
             r["document"] = doc
         changed.append("document")
-    for arg, field in (("document", "document"), ("dataset", "dataset"),
-                       ("src_language", "src_language"), ("segmented_by", "segmented_by")):
-        val = getattr(args, arg)
+    for field in ("document", "dataset", "src_language", "segmented_by"):
+        val = getattr(args, field)
         if val is not None:
             for r in recs:
                 r[field] = val
@@ -222,382 +199,149 @@ def update_metadata(recs, args):
     return recs
 
 
-# ---------------------------------------------------------------- align: time
+# ---------------------------------------------------------------- documents and the --add files
 
-def assign_by_time(words, recs):
-    """Sentence index per word: max time overlap, else nearest; monotonic."""
-    begs = [r["beg"] for r in recs]
-    ends = [r["end"] for r in recs]
-    out, j, n_gap = [], 0, 0
-    for w in words:
-        ws, we = float(w["start"]), float(w["end"])
-        best, best_ov = None, 0.0
-        lo = max(0, j - 2)
-        k = lo
-        while k < len(recs) and begs[k] <= we + 1e-9:
-            ov = min(we, ends[k]) - max(ws, begs[k])
-            if ov > best_ov:
-                best, best_ov = k, ov
-            k += 1
-        if best is None:
-            mid = (ws + we) / 2
-            best = min(range(lo, len(recs)),
-                       key=lambda q: 0 if begs[q] <= mid <= ends[q] else min(abs(mid - begs[q]), abs(mid - ends[q])))
-            n_gap += 1
-        best = max(best, j)
-        j = best
-        out.append(best)
-    print(f"time: {n_gap} word(s) outside any sentence, assigned to the nearest", file=sys.stderr)
-    return out, ["time"] * len(recs)
+ADD_SUFFIXES = (".jsonl", ".txt")
 
 
-# ---------------------------------------------------------------- align: mwer (mweralign)
+def add_suffixes(args):
+    if args.add_suffix:
+        return [args.add_suffix]
+    return ([f".{args.lan}{x}" for x in ADD_SUFFIXES] if args.lan else []) + list(ADD_SUFFIXES)
 
-def assign_by_mwer(words, recs, ref_system, args):
-    """Re-segment the added words to the sentences of ref_system with mweralign
-    (https://github.com/mjpost/mweralign, AS-WER algorithm of mwerSegmenter), then map the output
-    lines back to the added words."""
-    src = use_submodule("mweralign", args.mweralign_dir)
-    try:
-        from mweralign import align_texts
-    except ImportError:
-        sys.exit("mweralign not found: run ./setup_aligners.sh (git submodule) or pip install mweralign")
-    if src:
-        print(f"mwer: using mweralign from {src}", file=sys.stderr)
 
-    segmenter = None
-    if args.mwer_tokenizer == "cj":
-        from mweralign.segmenter import CJSegmenter
-        segmenter = CJSegmenter()
-    elif args.mwer_tokenizer not in ("none", "whitespace"):
-        from mweralign import models
-        from mweralign.segmenter import SPSegmenter
-        segmenter = SPSegmenter(models.resolve(args.mwer_tokenizer))
-    non_whitespace = args.lan in ("zh", "ja")
-    from mweralign.segmenter import SPSegmenter as _SP
-    is_tokenized = isinstance(segmenter, _SP) and not non_whitespace
+def expand_add(patterns, args):
+    """--add: files, globs and directories -> a list of files (a directory gives every file with a
+    known suffix)."""
+    out = []
+    for p in patterns:
+        paths = sorted(globmod.glob(p)) if any(c in p for c in "*?[") and not Path(p).exists() else [p]
+        if not paths:
+            sys.exit(f"--add: no file matches {p!r}")
+        for q in paths:
+            if Path(q).is_dir():
+                found = [str(f) for suf in add_suffixes(args) for f in sorted(Path(q).glob(f"*{suf}"))]
+                if not found:
+                    sys.exit(f"--add: no {', '.join(add_suffixes(args))} file in {q}")
+                out += found
+            elif Path(q).is_file():
+                out.append(q)
+            else:
+                sys.exit(f"--add: no such file: {q}")
+    seen, uniq = set(), []
+    for p in out:
+        if p not in seen:
+            seen.add(p)
+            uniq.append(p)
+    return uniq
 
-    def tok(text):
-        text = " ".join(text.split())
-        return " ".join(segmenter.encode(text)) if segmenter is not None else text
 
-    refs = []
+def group_documents(recs, args):
+    """{document: [records]}, in the order they appear in the file."""
+    groups = {}
     for r in recs:
-        t = r["text"].get(ref_system, "").strip()
-        refs.append(tok(t) if t else "_")  # an empty line would change the number of reference segments
-    hyp = tok(" ".join(str(w["word"]).strip() for w in words))
-    result = align_texts("\n".join(refs), hyp, is_tokenized=is_tokenized,
-                         forbid_midword_boundary=is_tokenized)
-    lines = result.split("\n")
-    if len(lines) > len(recs) and not "".join(lines[len(recs):]).strip():
-        lines = lines[:len(recs)]
-    if len(lines) != len(recs):
-        sys.exit(f"mweralign returned {len(lines)} lines for {len(recs)} sentences")
-    if segmenter is not None:
-        lines = [segmenter.decode(l) for l in lines]
-
-    # map back by characters (ignoring whitespace): each word goes to the line of its first character
-    line_of_char = [k for k, l in enumerate(lines) for c in l if not c.isspace()]
-    sent_of, pos, mismatch = [], 0, 0
-    for w in words:
-        chars = [c for c in str(w["word"]) if not c.isspace()]
-        k = line_of_char[pos] if pos < len(line_of_char) else len(recs) - 1
-        sent_of.append(k)
-        pos += len(chars)
-    if len(line_of_char) != sum(len([c for c in str(w["word"]) if not c.isspace()]) for w in words):
-        mismatch = 1
-        print("WARNING: mweralign output differs from the input characters; the word mapping may be off "
-              "(try --mwer-tokenizer none)", file=sys.stderr)
-    cur = 0
-    for i in range(len(sent_of)):  # keep monotonic
-        sent_of[i] = cur = max(sent_of[i], cur)
-    print(f"mwer: mweralign ({args.mwer_tokenizer}) re-segmented {len(words)} words into {len(recs)} sentences",
-          file=sys.stderr)
-    return sent_of, ["mwer"] * len(recs)
+        groups.setdefault(r.get("document"), []).append(r)
+    if len(groups) > 1 and None in groups:
+        sys.exit("--input: some lines have no \"document\"; cannot tell the documents apart")
+    return groups
 
 
-# ---------------------------------------------------------------- align: vecalign
-
-def split_target_sentences(words, segments, args):
-    """Target sentences as lists of word indices."""
-    if args.tgt_split == "segments":
-        return segments
-    text = " ".join(str(w["word"]).strip() for w in words)
-    try:
-        from mosestokenizer import MosesSentenceSplitter
-        with MosesSentenceSplitter(args.lan) as split:
-            sents = split([text]) if text.strip() else []
-    except ImportError:
-        from sentence_splitter import SentenceSplitter
-        sents = SentenceSplitter(language=args.lan).split(text=text)
-    out, i = [], 0
-    for s in sents:
-        n = len(s.split())
-        if n:
-            out.append(list(range(i, min(i + n, len(words)))))
-            i += n
-    if i < len(words):
-        out.append(list(range(i, len(words))))
-    return [g for g in out if g]
-
-
-def embedder(model_name):
-    if model_name == "hash":  # testing only: bag of character trigrams, NOT cross-lingual
-        import numpy as np
-
-        def enc(texts):
-            m = np.zeros((len(texts), 4096), dtype=np.float32)
-            for r, t in enumerate(texts):
-                t = f"  {t.lower()}  "
-                for q in range(len(t) - 2):
-                    m[r, hash(t[q:q + 3]) % 4096] += 1
-            n = np.linalg.norm(m, axis=1, keepdims=True)
-            return m / np.maximum(n, 1e-9)
-        return enc
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(model_name)
-    return lambda texts: model.encode(texts, batch_size=64, normalize_embeddings=True, show_progress_bar=False)
-
-
-def vecalign(src_texts, tgt_texts, args, enc):
-    """Align with the original Vecalign (https://github.com/thompsonb/vecalign), using our own sentence
-    embeddings (LaBSE by default) instead of LASER files. Returns (units, S): units =
-    [(src_start, src_len, tgt_start, tgt_len)] in order, S = {(i, 1): embedding of source sentence i}."""
-    import numpy as np
-    from math import ceil
-    src = use_submodule("vecalign", args.vecalign_dir)
-    if src:
-        print(f"vecalign: using vecalign from {src}", file=sys.stderr)
-    try:
-        from vecalign.dp_utils import (yield_overlaps, make_doc_embedding, make_alignment_types,
-                                       preprocess_line, vecalign as run_vecalign)
-    except ImportError as e:
-        sys.exit(f"vecalign not found or not built ({e}): run ./setup_aligners.sh")
-    n = args.max_size
-    overlaps = sorted(set(yield_overlaps(src_texts, n)) | set(yield_overlaps(tgt_texts, n)))
-    E = np.asarray(enc(overlaps), dtype=np.float32)
-    sent2line = {t: k for k, t in enumerate(overlaps)}
-    vecs0 = make_doc_embedding(sent2line, E, src_texts, n)
-    vecs1 = make_doc_embedding(sent2line, E, tgt_texts, n)
-    stack = run_vecalign(vecs0=vecs0, vecs1=vecs1,
-                         final_alignment_types=make_alignment_types(n),
-                         del_percentile_frac=args.del_percentile,
-                         width_over2=ceil(n / 2.0) + args.search_buffer_size,
-                         max_size_full_dp=args.max_size_full_dp,
-                         costs_sample_size=20000,
-                         num_samps_for_norm=100)
-    alignments = stack[0]["final_alignments"]
-
-    units, next_src, next_tgt = [], 0, 0
-    for xs, ys in alignments:
-        si = min(xs) if xs else next_src
-        tj = min(ys) if ys else next_tgt
-        units.append((si, len(xs), tj, len(ys)))
-        next_src = max(xs) + 1 if xs else next_src
-        next_tgt = max(ys) + 1 if ys else next_tgt
-    S = {(i, 1): E[sent2line[preprocess_line(t)[:10000]]] for i, t in enumerate(src_texts)}
-    print(f"vecalign: {len(src_texts)} source vs {len(tgt_texts)} target sentences, {len(units)} units",
-          file=sys.stderr)
-    return units, S
-
-
-def refine_splits(split_units, words, src_emb, src_texts, enc, args):
-    """For n:m units, choose where to cut the target words between the n source sentences: the cut
-    points (whole words, within --split-window words of the time/proportional guess) that maximise the
-    sum of cos(source sentence, target piece) + a small bonus for cutting after punctuation."""
-    import numpy as np
-    W = args.split_window
-    plans, texts = [], {}
-    for si, a, tw, prior in split_units:
-        L = len(tw)
-        allowed = [sorted({min(max(0, p + d), L) for d in range(-W, W + 1)}) for p in prior]
-        starts = [[0]] + allowed
-        ends = allowed + [[L]]
-        spans = {(x, y) for q in range(a) for x in starts[q] for y in ends[q] if x < y}
-        for x, y in spans:
-            texts.setdefault(" ".join(str(words[tw[k]]["word"]) for k in range(x, y)), None)
-        plans.append((si, a, tw, starts, ends))
-    if not plans:
-        return {}
-    keys = list(texts)
-    E = enc(keys)
-    emb = {t: E[n] for n, t in enumerate(keys)}
-    punct = (",", ".", ";", ":", "?", "!", "…", "–", "—")
-    out = {}
-    for si, a, tw, starts, ends in plans:
-        def score(q, x, y):
-            if x == y:  # empty piece: this source sentence gets no target words
-                return 0.0
-            t = " ".join(str(words[tw[k]]["word"]) for k in range(x, y))
-            sc = float(src_emb[si + q] @ emb[t])
-            # mild length prior: pieces much longer/shorter (in characters) than the source are suspicious
-            sc -= args.split_length_weight * abs(math.log((len(t) + 1) / (len(src_texts[si + q]) + 1)))
-            if y < len(tw) and str(words[tw[y - 1]]["word"]).rstrip("\"'”»)").endswith(punct):
-                sc += args.split_punct_bonus
-            return sc
-        # DP over source sentences q and cut position x (start of piece q)
-        best = {0: (0.0, [])}
-        for q in range(a):
-            nxt = {}
-            for x, (sc0, path) in best.items():
-                for y in ends[q]:
-                    if y < x:
-                        continue
-                    v = sc0 + score(q, x, y)
-                    if y not in nxt or v > nxt[y][0]:
-                        nxt[y] = (v, path + [y])
-            best = nxt
-        if len(tw) not in best:
-            continue
-        cuts = best[len(tw)][1]
-        q = 0
-        for n, k in enumerate(tw):
-            while q < a - 1 and n >= cuts[q]:
-                q += 1
-            out[k] = si + q
-    return out
-
-
-def assign_by_vecalign(words, segments, recs, ref_system, args):
-    import numpy as np
-    tgt = split_target_sentences(words, segments, args)
-    tgt_texts = [" ".join(str(words[k]["word"]) for k in g) for g in tgt]
-    src_texts = [r["text"].get(ref_system, "") for r in recs]
-    N, M = len(src_texts), len(tgt_texts)
-    timed = has_times(words)
-
-    enc = embedder(args.embed_model)
-    units, S = vecalign(src_texts, tgt_texts, args, enc)
-    split_units = []
-
-    sent_of = [None] * len(words)
-    labels = [None] * len(recs)
-    pending = []  # target words of 0:1 units waiting for a sentence
-    last = 0
-    for si, a, tj, b in units:
-        tw = [k for g in tgt[tj:tj + b] for k in g]
-        if a == 0:  # unaligned target sentence(s): attach to the previous source sentence
-            if si > 0:
-                for k in tw:
-                    sent_of[k] = si - 1
-                labels[si - 1] = (labels[si - 1] or "") + "+ins"
-            else:
-                pending += tw
-            continue
-        if pending:  # 0:1 before the first source sentence -> attach to it
-            tw = pending + tw
-            pending = []
-            labels[si] = "+ins"
-        if b == 0:
-            labels[si] = f"vecalign 1:0" + (labels[si] or "")
-            continue
-        lab = f"vecalign {a}:{b}"
-        if a == 1:
-            for k in tw:
-                sent_of[k] = si
-        else:  # divide the target words among the a source sentences
-            lab += " split"
-            if timed:
-                ends_ = [r["end"] for r in recs[si:si + a]]
-                q = 0
-                for k in tw:
-                    mid = (words[k]["start"] + words[k]["end"]) / 2
-                    while q < a - 1 and mid > ends_[q]:
-                        q += 1
-                    sent_of[k] = si + q
-            else:
-                lens = [max(1, len(src_texts[si + q].split())) for q in range(a)]
-                tot = sum(lens)
-                cum, bounds = 0, []
-                for L in lens:
-                    cum += L
-                    bounds.append(cum / tot * len(tw))
-                q = 0
-                for n, k in enumerate(tw):
-                    while q < a - 1 and n >= bounds[q]:
-                        q += 1
-                    sent_of[k] = si + q
-        if a > 1:
-            prior = [sum(1 for k in tw if sent_of[k] < si + q) for q in range(1, a)]
-            split_units.append((si, a, tw, prior))
-        for q in range(a):
-            labels[si + q] = lab + (labels[si + q] or "")
-        last = si + a - 1
-    for k in pending:
-        sent_of[k] = last
-    if split_units and args.split_method == "embed":
-        src_emb = [S[(i, 1)] for i in range(N)]
-        refined = refine_splits(split_units, words, src_emb, src_texts, enc, args)
-        moved = sum(1 for k, v in refined.items() if sent_of[k] != v)
-        for k, v in refined.items():
-            sent_of[k] = v
-        print(f"vecalign: {len(split_units)} n:m unit(s) split by embeddings "
-              f"({moved} word(s) moved vs. the {'time' if timed else 'proportional'} split)", file=sys.stderr)
-    cur = 0
-    for k in range(len(words)):
-        if sent_of[k] is None:
-            sent_of[k] = cur
-        cur = sent_of[k]
-    labels = [l or "vecalign 1:0" for l in labels]
-    from collections import Counter
-    c = Counter(l.split(" ")[1] if " " in l else l for l in labels)
-    print(f"vecalign: {len(units)} units; per sentence: " + ", ".join(f"{k} x{v}" for k, v in c.most_common()),
-          file=sys.stderr)
-    return sent_of, labels
+def match_add(adds, groups, args):
+    """[(document, add path)]; an --add file whose document is not in --input is an error."""
+    pairs, missing = [], []
+    for a in adds:
+        doc = stem_doc(a, args)
+        if doc in groups:
+            pairs.append((doc, a))
+        elif len(groups) == 1 and len(adds) == 1:  # single document, single file: trust the user
+            pairs.append((next(iter(groups)), a))
+        else:
+            missing.append((doc, a))
+    if missing:
+        show = ", ".join(f"{d} ({Path(a).name})" for d, a in missing[:5])
+        sys.exit(f"--add: {len(missing)} file(s) whose document is not in {args.input}: {show}"
+                 f"{' ...' if len(missing) > 5 else ''}")
+    seen = {d for d, _ in pairs}
+    if len(seen) < len(pairs):
+        dup = [d for d in seen if sum(1 for x, _ in pairs if x == d) > 1]
+        sys.exit(f"--add: several files for document(s) {', '.join(sorted(dup)[:5])}")
+    idle = [d for d in groups if d not in seen]
+    if idle:
+        print(f"WARNING: {len(idle)} document(s) in --input have no --add file and keep their systems "
+              f"unchanged: {', '.join(map(str, idle[:5]))}{' ...' if len(idle) > 5 else ''}",
+              file=sys.stderr)
+    return pairs
 
 
 # ---------------------------------------------------------------- add a system
 
 def add_system(recs, words, segments, args):
-    name = args.name
     info = recs[0]["systems_info"]
-    if name in info and not args.overwrite:
-        sys.exit(f"system {name!r} is already in the input (use --overwrite)")
+    if args.name in info and not args.overwrite:
+        sys.exit(f"system {args.name!r} is already in the input (use --overwrite)")
     if args.lan is None:
         sys.exit("--lan is required with --add")
     if not words:
-        sys.exit(f"{args.add}: no words")
+        sys.exit("--add: no words in the file")
 
-    if args.align == "time":
-        if not has_times(words):
-            sys.exit("--align time needs word timestamps; use --align mwer or vecalign")
-        sent_of, labels = assign_by_time(words, recs)
-    elif args.align == "mwer":
-        ref = args.align_to or next((s for s, v in info.items() if v.get("lan") == args.lan and s != name), None)
+    if args.align == "mwer":
+        ref = args.align_to or next((s for s, v in info.items()
+                                     if v.get("lan") == args.lan and s != args.name), None)
         if ref is None:
             sys.exit(f"--align mwer needs a system in the same language ({args.lan}) to align to; "
                      f"give --align-to (systems: {', '.join(info)})")
         if info.get(ref, {}).get("lan") not in (None, args.lan):
             print(f"WARNING: aligning {args.lan} to {ref!r} ({info[ref]['lan']}) with mwer; "
                   f"use vecalign for different languages", file=sys.stderr)
-        print(f"mwer: aligning to {ref!r}", file=sys.stderr)
-        sent_of, labels = assign_by_mwer(words, recs, ref, args)
     else:
         ref = args.align_to or recs[0]["segmented_by"]
-        print(f"vecalign: aligning to {ref!r}", file=sys.stderr)
-        sent_of, labels = assign_by_vecalign(words, segments, recs, ref, args)
+    if args.align != "time":
+        print(f"{args.align}: aligning to {ref!r}", file=sys.stderr)
+    sent_of, labels = align(args.align, words, segments, recs, ref, Options.from_args(args))
 
     per_sent = [[] for _ in recs]
     for w, k in zip(words, sent_of):
         per_sent[k].append(w)
     for r, ws, lab in zip(recs, per_sent, labels):
-        r["systems_info"][name] = {"lan": args.lan, "is_human": args.is_human}
-        r["text"][name] = args.joiner.join(str(w["word"]).strip() for w in ws)
-        r.setdefault("alignment", {})[name] = lab
+        r["systems_info"][args.name] = {"lan": args.lan, "is_human": args.is_human}
+        r["text"][args.name] = args.joiner.join(str(w["word"]).strip() for w in ws)
+        r.setdefault("alignment", {})[args.name] = lab
         if args.with_words:
-            r.setdefault("words", {})[name] = ws
-        elif name in r.get("words", {}):
-            del r["words"][name]  # overwritten system: don't keep its old words
+            r.setdefault("words", {})[args.name] = ws
+        elif args.name in r.get("words", {}):
+            del r["words"][args.name]  # overwritten system: don't keep its old words
     empty = sum(1 for ws in per_sent if not ws)
-    print(f"added {name!r}: {len(words)} words -> {len(recs)} sentences, {empty} sentence(s) without words",
-          file=sys.stderr)
+    print(f"added {args.name!r}: {len(words)} words -> {len(recs)} sentences, "
+          f"{empty} sentence(s) without words", file=sys.stderr)
     return recs
 
 
+def add_to_document(recs, add_path, args):
+    """Align one --add file into the records of one document (updated in place)."""
+    print(f"adding {add_path}", file=sys.stderr)
+    words, segments = load_add(add_path)
+    if args.align == "time" and not has_times(words):
+        raise ValueError("--align time needs word timestamps; use --align mwer or vecalign")
+    add_system(recs, words, segments, args)
+
+
+def write_jsonl(path, recs):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(str(path) + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as o:
+        for r in recs:
+            o.write(json.dumps(r, ensure_ascii=False) + "\n")
+    tmp.replace(path)
+
+
+# ---------------------------------------------------------------- CLI
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--input", required=True, help="asr_sentences.py output, or output of this script")
-    ap.add_argument("--output", required=True, help="output JSONL (may be the same file as --input)")
+    ap.add_argument("--input", required=True,
+                    help="asr_sentences.py output, or output of this script (one or many documents "
+                         "merged into one file)")
+    ap.add_argument("--output", help="output JSONL (default: edit --input in place)")
     # metadata
     ap.add_argument("--document", help="document ID, e.g. the audio file stem")
     ap.add_argument("--dataset")
@@ -609,65 +353,101 @@ def main():
     ap.add_argument("--lan", help="language of the system's text")
     ap.add_argument("--is-human", action="store_true", help="the system is a human (e.g. gold transcript)")
     # adding
-    ap.add_argument("--add", help="file of the system to add (Canary JSONL with words, NeMo JSON, or plain text)")
-    ap.add_argument("--align", choices=["mwer", "vecalign", "time"], default="vecalign")
-    ap.add_argument("--align-to", help="system to align to (mwer: a system in the same language, default the "
-                                       "first one with --lan; vecalign: default the segmentation system)")
-    ap.add_argument("--mwer-tokenizer", default="spm32k",
-                    help="mwer: mweralign tokenizer: spm32k (default, recommended by mweralign), spm64k, "
-                         "spm128k, spm256k, a SentencePiece .model path, 'cj', or 'none' (whitespace)")
-    ap.add_argument("--tgt-split", choices=["moses", "segments"], default="moses",
-                    help="vecalign: split the added text into sentences with Moses (default), or use its own "
-                         "lines/segments as sentences")
-    ap.add_argument("--embed-model", default="sentence-transformers/LaBSE",
-                    help="vecalign: sentence-transformers model (default LaBSE; 'hash' = testing only)")
-    ap.add_argument("--max-size", type=int, default=4,
-                    help="vecalign: Vecalign's --alignment_max_size: max sentences in one unit, e.g. 4 allows 1:3, 2:2, "
-                         "3:1 (default 4)")
-    ap.add_argument("--vecalign-dir", help="path to a vecalign checkout (default: third_party/vecalign)")
-    ap.add_argument("--mweralign-dir", help="path to a mweralign checkout (default: third_party/mweralign)")
-    ap.add_argument("--search-buffer-size", type=int, default=5,
-                    help="vecalign: Vecalign's --search_buffer_size (default 5)")
-    ap.add_argument("--max-size-full-dp", type=int, default=300,
-                    help="vecalign: Vecalign's --max_size_full_dp (default 300)")
-    ap.add_argument("--del-percentile", type=float, default=0.2,
-                    help="vecalign: Vecalign's --del_percentile_frac (default 0.2)")
-    ap.add_argument("--split-method", choices=["embed", "prior"], default="embed",
-                    help="vecalign: how to divide one target sentence among several source sentences (n:m units): "
-                         "embed = cut where the pieces match the source sentences best (default); prior = by "
-                         "word timestamps, or proportionally to length without timestamps")
-    ap.add_argument("--split-window", type=int, default=20,
-                    help="vecalign: search cut points within this many words of the time/proportional guess")
-    ap.add_argument("--split-length-weight", type=float, default=0.1,
-                    help="vecalign: weight of the length prior when splitting (default 0.1)")
-    ap.add_argument("--split-punct-bonus", type=float, default=0.03,
-                    help="vecalign: score bonus for cutting after punctuation (default 0.03)")
+    ap.add_argument("--add", nargs="+",
+                    help="file(s) of the system to add: one file, or several files / globs / "
+                         "directories, matched to the documents of --input by file name and all "
+                         "processed in this one process (models loaded once)")
+    ap.add_argument("--add-suffix", help="with a directory in --add: take DOC + this suffix "
+                                         "(default: .<lan>.jsonl, .<lan>.txt, .jsonl, .txt)")
+    ap.add_argument("--continue-on-error", action="store_true",
+                    help="with several --add files: report a failing document and go on")
+    ap.add_argument("--align", choices=["mwer", "vecalign", "time"], default="vecalign",
+                    help="mwer: same language as --align-to; vecalign: a translation; time: word "
+                         "timestamps only (default: vecalign)")
+    ap.add_argument("--align-to", help="system to align to (mwer: a system in the same language, default "
+                                       "the first one with --lan; vecalign: default the segmentation system)")
     ap.add_argument("--joiner", default=" ", help="string between words (default: space; '' for zh/ja)")
     ap.add_argument("--overwrite", action="store_true", help="replace a system that is already present")
-    ap.add_argument("--with-words", action="store_true", help="store words (with timestamps if any) per system")
+    ap.add_argument("--with-words", action="store_true",
+                    help="store words (with timestamps if any) per system")
+    # alignment tuning; defaults are those of Vecalign and mweralign (see alignments.py)
+    g = ap.add_argument_group("alignment tuning")
+    g.add_argument("--mwer-tokenizer", default="spm32k",
+                   help="mweralign tokenizer: spm32k (default), spm64k, spm128k, spm256k, a "
+                        "SentencePiece .model path, 'cj', or 'none'")
+    g.add_argument("--tgt-split", choices=["moses", "segments"], default="moses",
+                   help="vecalign: split the added text into sentences with Moses (default), or use its "
+                        "own lines/segments")
+    g.add_argument("--embed-model", default="sentence-transformers/LaBSE",
+                   help="vecalign: sentence-transformers model (default LaBSE; 'hash' = testing only)")
+    g.add_argument("--embed-device", default=None, help="vecalign: cuda, cuda:0, cpu (default: auto)")
+    g.add_argument("--embed-fp16", action="store_true", help="vecalign: half precision on CUDA")
+    g.add_argument("--embed-batch-size", type=int, default=256, help="vecalign: encoding batch size")
+    g.add_argument("--max-size", type=int, default=4,
+                   help="vecalign: max sentences in one unit, e.g. 4 allows 1:3, 2:2, 3:1 (default 4)")
+    g.add_argument("--search-buffer-size", type=int, default=5, help="vecalign: Vecalign's default, 5")
+    g.add_argument("--max-size-full-dp", type=int, default=300, help="vecalign: Vecalign's default, 300")
+    g.add_argument("--del-percentile", type=float, default=0.2,
+                   help="vecalign: Vecalign's --del_percentile_frac (default 0.2)")
+    g.add_argument("--split-method", choices=["embed", "prior"], default="embed",
+                   help="vecalign: how to divide one added sentence among several existing sentences: "
+                        "embed = where the pieces match the sentences best (default); prior = by "
+                        "timestamps, or proportionally to length without them")
+    g.add_argument("--split-window", type=int, default=8,
+                   help="vecalign: search cut points within this many words of the first guess")
+    g.add_argument("--split-length-weight", type=float, default=0.1,
+                   help="vecalign: weight of the length prior when splitting (default 0.1)")
+    g.add_argument("--split-punct-bonus", type=float, default=0.03,
+                   help="vecalign: bonus for cutting after punctuation (default 0.03)")
+    g.add_argument("--vecalign-dir", help="path to a vecalign checkout (default: third_party/vecalign)")
+    g.add_argument("--mweralign-dir", help="path to a mweralign checkout (default: third_party/mweralign)")
     args = ap.parse_args()
+
+    if args.add and not args.name:
+        sys.exit("--name is required with --add")
 
     recs = read_jsonl(args.input)
     if not recs:
         sys.exit(f"{args.input} is empty")
     aligned = is_aligned_format(recs)
     if args.add and not aligned:
-        sys.exit("create the aligned file first (without --add), then add systems one per call")
-    recs = update_metadata(recs, args) if aligned else create(recs, args)
-    if args.add:
-        if not args.name:
-            sys.exit("--name is required with --add")
-        words, segments = load_add(args.add)
-        recs = add_system(recs, words, segments, args)
+        sys.exit("create the aligned file first (without --add), then add systems")
+    if not aligned:
+        recs = create(recs, args.input, args)
+        groups = group_documents(recs, args)
+    else:
+        groups = group_documents(recs, args)
+        if len(groups) > 1:
+            print(f"{len(groups)} documents in {args.input}", file=sys.stderr)
+        for doc, doc_recs in groups.items():
+            update_metadata(doc_recs, args.input, args)
 
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    tmp = Path(str(args.output) + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as o:
-        for r in recs:
-            o.write(json.dumps(r, ensure_ascii=False) + "\n")
-    tmp.replace(args.output)
-    print(f"-> {args.output}: {len(recs)} sentences, systems: {', '.join(recs[0]['systems_info'])}",
-          file=sys.stderr)
+    failed = []
+    if args.add:
+        pairs = match_add(expand_add(args.add, args), groups, args)
+        t0 = time.time()
+        for n, (doc, add_path) in enumerate(pairs, 1):
+            if len(pairs) > 1:
+                print(f"\n[{n}/{len(pairs)}] {doc}", file=sys.stderr)
+            try:
+                add_to_document(groups[doc], add_path, args)
+            except Exception as e:
+                if len(pairs) == 1 or not args.continue_on_error:
+                    raise
+                print(f"FAILED {doc}: {type(e).__name__}: {e}", file=sys.stderr)
+                failed.append(doc)
+        if len(pairs) > 1:
+            dt = time.time() - t0
+            print(f"\ndone: {len(pairs) - len(failed)}/{len(pairs)} document(s) in {dt:.0f}s "
+                  f"({dt / len(pairs):.1f}s each)", file=sys.stderr)
+
+    out_path = args.output or args.input
+    write_jsonl(out_path, recs)
+    print(f"-> {out_path}: {len(recs)} sentences in {len(groups)} document(s), systems: "
+          f"{', '.join(recs[0]['systems_info'])}", file=sys.stderr)
+    if failed:
+        print("failed: " + ", ".join(failed), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

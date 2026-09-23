@@ -7,7 +7,8 @@ Czech speech → English) in [Pearmut](https://github.com/zouharvi/pearmut).
 |---|---|
 | `annotations.jsonl` | Suggested harmful errors, one line per segment (format below) |
 | `asr_sentences.py` | Re-segments Canary output into sentences (Moses sentence splitter) |
-| `add_and_align_sentences.py` | Builds the sentence-level, multi-system JSONL (`--align mwer/vecalign/time`) |
+| `add_and_align_sentences.py` | Builds the sentence-level, multi-system JSONL, one document per call |
+| `alignments.py` | The three alignment methods used by it: `mwer`, `vecalign`, `time` |
 | `setup_aligners.sh` | Adds and builds the aligners as git submodules under `third_party/` |
 | `segment_audio.py` | Cuts every long audio file into per-segment clips |
 | `make_pearmut_campaign.py` | Builds a Pearmut campaign from `annotations.jsonl` |
