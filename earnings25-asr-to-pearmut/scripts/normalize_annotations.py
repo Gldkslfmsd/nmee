@@ -22,7 +22,8 @@ Everything else is passed through untouched, including the Earnings25-specific e
 (clip_id, company, industry, clip_wer, severity, harm_types_code, intended_*, span_orig_*).
 
 Usage:
-    python normalize_annotations.py ../harm_annotation_eng_asr/_all_clips.jsonl -o annotations.jsonl
+    python scripts/normalize_annotations.py ../harm_annotation_eng_asr/_all_clips.jsonl \
+        --canary-dir ../../results/canary/en -o annotations/annotations.jsonl
 """
 import argparse
 import json

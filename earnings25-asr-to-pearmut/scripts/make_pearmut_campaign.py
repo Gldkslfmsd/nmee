@@ -18,9 +18,10 @@ Differences from the IWSLT version, beyond dropping the yaml/reference re-alignm
 This is ASR-only: `tgt` is the English Canary transcript itself, and every error_source is "ASR".
 
 Usage:
-    python make_pearmut_campaign.py annotations.jsonl --clips-dir clips \
-        --severity high,medium --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
-    pearmut add -o campaign.json
+    python scripts/make_pearmut_campaign.py annotations/annotations.jsonl --clips-dir clips \
+        --severity high,medium --copy-assets "${PEARMUT_ROOT:-.}/data/assets" \
+        -o campaigns/asr_harm_en.json
+    pearmut add -o campaigns/asr_harm_en.json
 """
 import argparse
 import html
@@ -30,7 +31,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-DEFAULT_TEMPLATE = Path(__file__).resolve().parent.parent / "custom_nmee_demo.json"
+DEFAULT_TEMPLATE = Path(__file__).resolve().parents[2] / "custom_nmee_demo.json"
 
 
 def esc(s):
@@ -41,6 +42,21 @@ def instruction_html(rec, targets, show_asr, multi_system):
     parts = []
     for t in targets:
         who = f"[{esc(t['system'])}] " if multi_system else ""
+        if t.get("source") == "dspy-divergencies":
+            # a vote of three LLMs over five languages, with its own error taxonomy; harm_types
+            # is always ["Other"] there, so printing it would be noise
+            n = t.get("num_models_reporting", 1)
+            models = ", ".join(t.get("models_reporting", [])) or "?"
+            if t.get("span_whole_output"):
+                what = "<b>whole output flagged</b> (no span pinpointed)"
+            else:
+                what = f"“{esc(t['span'])}”"
+            cls = f" {esc(t['error_class'])};" if t.get("error_class") else ""
+            parts.append(
+                f"{who}<b>Divergence ({n} model{'s' if n != 1 else ''}):</b> {what}."
+                f"<i>{cls} {esc(models)}.</i> {esc(t.get('explanation', ''))}"
+            )
+            continue
         if t["span"]:
             what = f"“{esc(t['span'])}” → intended: “{esc(t.get('intended', ''))}”"
         else:  # pure deletion: nothing to quote, the words are simply absent
@@ -55,12 +71,19 @@ def instruction_html(rec, targets, show_asr, multi_system):
     return "<br>".join(parts)
 
 
-def select(targets, confidence, severities):
+def select(targets, confidence, severities, langs, sources, min_models):
     out = targets
     if confidence != "all":
         out = [t for t in out if t.get("confidence") == confidence]
     if severities:
-        out = [t for t in out if t.get("severity") in severities]
+        # only the asr-harm targets carry a severity; targets without one are not filtered out
+        out = [t for t in out if "severity" not in t or t["severity"] in severities]
+    if langs:
+        out = [t for t in out if t.get("tgt_lan") in langs]
+    if sources:
+        out = [t for t in out if t.get("source", "asr-harm") in sources]
+    if min_models > 1:
+        out = [t for t in out if t.get("num_models_reporting", min_models) >= min_models]
     return out
 
 
@@ -72,10 +95,24 @@ def main():
     ap.add_argument("--assets-url", help="URL prefix for clips (default: ./assets/<campaign-id>)")
     ap.add_argument("--copy-assets", metavar="ASSETS_DIR", help="copy needed clips to ASSETS_DIR/<campaign-id>/")
     ap.add_argument("--confidence", choices=["all", "harmful", "borderline"], default="all")
-    ap.add_argument("--severity", help="comma-separated subset of high,medium,low (default: all)")
+    ap.add_argument("--severity", help="comma-separated subset of high,medium,low (default: all); "
+                    "only applies to targets that carry a severity, i.e. the asr-harm ones")
+    ap.add_argument("--lang", help="comma-separated target languages to keep, e.g. cs or en,de")
+    ap.add_argument("--source", help="comma-separated subset of asr-harm,dspy-divergencies")
+    ap.add_argument("--min-models", type=int, default=1,
+                    help="keep divergence targets reported by at least this many models (default: 1)")
+    ap.add_argument("--shuffle", choices=["keep", "on", "off"], default="keep",
+                    help="override the template's model shuffling; columns are languages in a "
+                    "merged campaign, so shuffling them only confuses the annotator (default: keep)")
+    ap.add_argument("--show-model-names", choices=["keep", "on", "off"], default="keep",
+                    help="label each output column; needed when the columns are languages")
     ap.add_argument("--no-gold", action="store_true", help="don't show the gold transcript")
     ap.add_argument("--show-asr", action="store_true", help="repeat the ASR text in the instructions")
     ap.add_argument("--no-prefill", action="store_true", help="don't pre-highlight suggested spans")
+    ap.add_argument("--slim", action="store_true",
+                    help="omit the echoed targets/asr/gold_transcript from each item. Pearmut keeps "
+                    "any extra key in the annotation logs, which is handy but roughly quadruples "
+                    "the campaign file; item_id joins back to the annotations file anyway.")
     ap.add_argument("--template", default=str(DEFAULT_TEMPLATE),
                     help=f"campaign JSON whose \"info\" block is copied verbatim (default: {DEFAULT_TEMPLATE})")
     ap.add_argument("--users", type=int, default=1, help="number of annotator tasks (default: 1)")
@@ -86,6 +123,8 @@ def main():
 
     assets_url = (args.assets_url or f"./assets/{args.campaign_id}").rstrip("/")
     severities = set(args.severity.split(",")) if args.severity else None
+    langs = set(args.lang.split(",")) if args.lang else None
+    sources = set(args.source.split(",")) if args.source else None
     if severities and not severities <= {"high", "medium", "low"}:
         sys.exit(f"--severity must be a subset of high,medium,low (got {sorted(severities)})")
 
@@ -95,7 +134,8 @@ def main():
         if not line.strip():
             continue
         rec = json.loads(line)
-        rec["targets"] = select(rec.get("targets", []), args.confidence, severities)
+        rec["targets"] = select(rec.get("targets", []), args.confidence, severities,
+                                langs, sources, args.min_models)
         if rec["targets"]:
             by_doc[rec["doc_id"]].append(rec)
             n_errors += len(rec["targets"])
@@ -127,8 +167,10 @@ def main():
                     print(f"WARNING: {rec['clip_id']}#{rec['segment']}: system {system} has "
                           f"different texts, keeping the first", file=sys.stderr)
                     continue
-                if not t["span"]:
-                    continue  # pure deletion: nothing to highlight, it stays in the instructions
+                if not t["span"] or t.get("span_start") is None:
+                    # pure deletion, or a divergence flag with no span pinpointed:
+                    # nothing to highlight, it stays in the instructions
+                    continue
                 s0 = t["span_start"] if text[t["span_start"]:t["span_end"]] == t["span"] else text.find(t["span"])
                 if s0 < 0:
                     print(f"WARNING: span {t['span']!r} not in {rec['clip_id']}#{rec['segment']} "
@@ -152,6 +194,10 @@ def main():
                 "asr": rec.get("asr"), "gold_transcript": rec.get("gold_transcript"),
                 "targets": rec["targets"],
             }
+            if args.slim:
+                for k in ("asr", "gold_transcript", "targets", "company", "filename",
+                          "orig_start", "orig_end"):
+                    item.pop(k, None)
             if spans and not args.no_prefill:
                 item["error_spans"] = dict(spans)
             doc.append(item)
@@ -166,6 +212,10 @@ def main():
         tasks = [documents for _ in range(args.users)]
 
     info = json.load(open(args.template, encoding="utf-8"))["info"]
+    if args.shuffle != "keep":
+        info["shuffle"] = args.shuffle == "on"
+    if args.show_model_names != "keep":
+        info["show_model_names"] = args.show_model_names == "on"
     campaign = {"info": info, "campaign_id": args.campaign_id, "data": tasks}
     json.dump(campaign, open(args.output, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
