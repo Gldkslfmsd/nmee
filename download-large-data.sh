@@ -4,6 +4,26 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# earnings25 from Zenodo (by Dominik):
+if [ ! -f earnings25.ok ]; then  
+    wget https://zenodo.org/records/18762168/files/earnings25.zip -O earnings25.zip && unzip earnings25.zip && touch earnings25.ok
+else
+    echo "earnings25 is already ok. We know it because earnings25.ok exists." >&2
+fi
+
+# Canary ST outputs (by Dominik):
+if [ "$USER" != machacek ]; then
+    # to be done: 
+    # download the whole output dir from
+    # https://ufallab.ms.mff.cuni.cz/~machacek/mtm26/outputs/
+fi
+
+# IWSLT26 cs dev+test (by Dominik):
+# to be done
+
+
+# by Augustin
+
 ### earnings25-asr-to-pearmut: pre-cut audio clips (3,104 mp3, ~220 MB)
 # One clip per annotated Canary segment, i.e. the assets the Pearmut campaigns refer to.
 # Covers the merged set (ASR-harm + DSPy divergencies); the ASR-only campaign uses a subset.
