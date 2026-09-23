@@ -6,15 +6,15 @@
 
 # create: document ID from the file name
 out=out.jsonl
-#: > $out
-#for asr in out-asr/*.en.jsonl ; do
-#    echo "Processing $asr"
-#    python add_and_align_sentences.py --input $asr \
-#        --output o.jsonl --name canary_asr --lan en --audio-dir out-seg \
-#        --dataset earnings-25 --src-language en \
-#        --segmented-by canary-asr+moses+gapshalved+min1sec --with-words --overwrite
-#    cat o.jsonl >> $out
-#done
+: > $out
+for asr in out-asr/*.en.jsonl ; do
+    echo "Processing $asr"
+    python add_and_align_sentences.py --input $asr \
+        --output o.jsonl --name canary_asr --lan en --audio-dir out-seg \
+        --dataset earnings-25 --src-language en \
+        --segmented-by canary-asr+moses+gapshalved+min1sec --with-words --overwrite
+    cat o.jsonl >> $out
+done
 
 for tgt in cs sk pl de ; do
     cs=../outputs/earnings-25/*.$tgt.jsonl
