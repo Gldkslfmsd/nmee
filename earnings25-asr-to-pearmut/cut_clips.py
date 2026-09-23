@@ -45,6 +45,15 @@ def main():
     args = ap.parse_args()
 
     audio_dir, out_dir = Path(args.audio_dir), Path(args.out_dir)
+    # bounds actually used for each clip, so that a later run with different bounds (e.g. after
+    # merge_annotations.py widened a clip to cover a divergence window) re-cuts it instead of
+    # silently keeping the old, too-short file
+    manifest_path = out_dir / ".bounds.json"
+    manifest = {}
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    new_manifest = {}
+
     jobs, missing, skipped = [], set(), 0
     for line in open(args.annotations, encoding="utf-8"):
         if not line.strip():
@@ -55,14 +64,18 @@ def main():
             missing.add(src.name)
             continue
         dst = out_dir / Path(rec["segment_filename"])
-        if dst.exists() and not args.force:
-            skipped += 1
-            continue
         # cut_*_in_clip is seg_*_in_clip widened where the stored ASR text runs past the segment
+        # or where a divergence window reaches further than the Canary segment
         lo = rec.get("cut_start_in_clip", rec["seg_start_in_clip"])
         hi = rec.get("cut_end_in_clip", rec["seg_end_in_clip"])
         start = max(0.0, lo - args.pad)
         dur = (hi + args.pad) - start
+        key = rec["segment_filename"]
+        bounds = [round(start, 3), round(dur, 3)]
+        new_manifest[key] = bounds
+        if dst.exists() and not args.force and manifest.get(key) == bounds:
+            skipped += 1
+            continue
         jobs.append((src, dst, start, dur))
 
     for name in sorted(missing):
@@ -77,7 +90,10 @@ def main():
             if i % 100 == 0 or i == len(jobs):
                 print(f"  {i}/{len(jobs)} clips", file=sys.stderr)
 
-    print(f"{len(jobs)} cut, {skipped} already present, {failed} failed -> {out_dir}", file=sys.stderr)
+    manifest.update(new_manifest)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=0, sort_keys=True), encoding="utf-8")
+    print(f"{len(jobs)} cut, {skipped} unchanged, {failed} failed -> {out_dir}", file=sys.stderr)
     if failed:
         sys.exit(1)
 

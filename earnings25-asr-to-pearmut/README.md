@@ -20,7 +20,8 @@ python normalize_annotations.py ../harm_annotation_eng_asr/_all_clips.jsonl \
     --canary-dir ../../results/canary/en -o annotations.jsonl
 
 # 2. cut one mp3 per annotated segment: clips/<clip_id>/<clip_id>.<NNNN>.mp3
-#    (1,905 clips, ~141 MB, ~2 min; needs ffmpeg)
+#    (1,905 clips, ~141 MB, ~2 min; needs ffmpeg). Re-running is cheap: clips/.bounds.json
+#    records the cut used for each clip, so only clips whose bounds changed are redone.
 python cut_clips.py annotations.jsonl clips \
     --audio-dir ../../earnings25_raw/earnings-25/testset-segmented/audio
 
@@ -36,6 +37,9 @@ pearmut run
 
 Step 2 needs the 3.1 GB raw dataset. If you don't have it, fetch the pre-cut clips instead —
 see `../download-large-data.sh`.
+
+For the **merged** campaigns that also carry Ondřej's DSPy divergence findings and the de/cs/pl/sk
+outputs, run `./build_merged_campaigns.sh` — see [Merging with the DSPy divergence set](#merging-with-the-dspy-divergence-set).
 
 ## What is in the campaign
 
@@ -113,3 +117,117 @@ byte-correct; `normalize_annotations.py` re-checks this and fails loudly if it e
 `campaign.json` was loaded with `pearmut add` and served with `pearmut run` (pearmut from PyPI):
 the campaign registers, the annotation page returns 200 and the clips are served from
 `/assets/earnings25_en_asr_harm_review/...` as `audio/mpeg`.
+
+---
+
+# Merging with the DSPy divergence set
+
+`merge_annotations.py` combines this set with the one from
+[`../dspy-search-for-errors/`](../dspy-search-for-errors/) (Ondřej Bojar's DSPy divergence finder:
+three LLMs — GLM, Kimi, gpt-oss-120B — voting over the same 290 clips in five languages).
+
+```bash
+./build_merged_campaigns.sh          # downloads his two archives, runs his merge, then ours
+```
+
+The whole thing is reproducible from what is committed: the two archives are fetched from the URLs
+in `../dspy-search-for-errors/*.url`, and step 1 is *his* `30-merge-annotations.py`, not a
+reimplementation — it already emits the shared `annotations.jsonl` schema.
+
+## What had to be reconciled
+
+The two sets describe the same audio but agree on almost nothing else:
+
+| | `harm_annotation_eng_asr/` | `dspy-search-for-errors/` |
+|---|---|---|
+| unit | one Canary **en** segment | a gold-transcript word range, mapped to time |
+| languages | en only | en + de/cs/pl/sk |
+| offsets | exact, into `asr` | into the model's own quoted rendering |
+| labels | 6 harm types + high/medium/low | `harm_types` always `["Other"]`; error class inside the explanation |
+| annotator | one LLM pass | three LLMs voting → `num_models_reporting` |
+
+`merge_annotations.py` puts both on the **Canary English segment grid**, which is the unit this
+directory already uses and the unit the audio clips are cut to. Each divergence record is attached
+to the Canary segment it overlaps most (91% of them touch exactly one).
+
+- **English is a real merge.** A divergence record's `automatic_texts["en"]` is a window of the same
+  Canary transcript, so its spans are re-located inside the full segment text and land on the *same*
+  target as this set's spans. That is where the two sets can actually be compared: **1,210 segments
+  are flagged by both.**
+- **de/cs/pl/sk are carried over, not merged.** There is nothing here to merge them with, and they
+  cannot be put on the English grid either: the per-language Canary outputs are independently
+  segmented (88/84/89/90/87 segments for the same clip), so an English segment number does not
+  index them. The divergence record's own time-aligned `automatic_texts[lang]` is used as the
+  target text, taking the largest-overlapping window when several map to one segment and
+  re-locating the other windows' spans into it.
+
+Nothing is dropped. A span that cannot be re-located keeps its explanation and simply is not
+pre-highlighted; the three models are collapsed per (language, span) with `num_models_reporting`
+kept on the target.
+
+## The merged set
+
+At `--min-models 2` (an error at least two of the three LLMs agreed on):
+
+```
+asr-harm targets in:      1999
+divergence records kept:  2511
+divergence spans:         13185 -> 4362 re-located, 168 not found (kept, not pre-highlighted)
+3104 segments, 15184 targets, 1210 segments flagged by both sets
+```
+
+Of the 3,104 segments: 695 come from this set only, 1,199 from the divergence set only, 1,210 from
+both. The remaining 8,655 divergence spans flag a whole output rather than a span — that is how the
+source data is, and they appear in the instructions without a highlight.
+
+`--min-models 1` keeps everything (5,223 records) and `--min-models 3` only unanimous findings (699).
+
+## The campaigns
+
+One campaign per **annotator language pair** — English plus one target language — because nobody
+reads en+de+cs+pl+sk, and every one of these is annotatable by an en+X reader:
+
+| campaign | documents | items | errors | pre-filled spans |
+|---|---|---|---|---|
+| `earnings25_merged_en` | 289 | 2,206 | 3,185 | 2,104 |
+| `earnings25_merged_ende` | 289 | 2,410 | 4,110 | 2,161 |
+| `earnings25_merged_encs` | 290 | 2,460 | 4,395 | 2,198 |
+| `earnings25_merged_enpl` | 290 | 2,476 | 4,397 | 2,190 |
+| `earnings25_merged_ensk` | 289 | 2,373 | 4,025 | 2,159 |
+
+Only `campaign_en.json` is committed (3.3 MB) — it is the English both-sources merge, the part that
+is new rather than a carry-over. The other four are one `./build_merged_campaigns.sh` away and are
+gitignored, as is `merged_annotations.jsonl` (16 MB).
+
+Three campaign settings differ from the ASR-only one, because the output columns are now languages
+rather than competing systems:
+
+- `--shuffle off` — Pearmut shuffles model columns per item by default, to avoid positional bias.
+  With languages as columns that only disorients the annotator.
+- `--show-model-names on` — otherwise the columns are unlabelled, and an annotator cannot tell
+  which language they are reading.
+- `--slim` — drops the copy of `targets`/`asr`/`gold_transcript` that Pearmut would otherwise keep
+  in the logs. It is useful provenance but roughly quadruples the file; `item_id` joins back to
+  `merged_annotations.jsonl` anyway.
+
+Filters compose, so any other slice is one flag away:
+
+```bash
+--lang cs --source dspy-divergencies   # Czech, divergence findings only
+--lang en --source asr-harm            # the original ASR-only campaign, from the merged file
+--min-models 3                         # only what all three LLMs agreed on
+--severity high                        # applies to asr-harm targets; others pass through
+```
+
+## A caveat about `clips/`
+
+The clips are cut to cover everything an item displays, so a segment that also carries a divergence
+window gets a wider clip than the ASR-only campaign would need. Bounds only ever widen, so building
+the merged set last (which `build_merged_campaigns.sh` does) leaves every campaign with audio that
+covers at least what it shows. `clips/.bounds.json` records what each clip was cut to.
+
+## Verified
+
+`campaign_encs.json` (en+cs, 2,460 items) was loaded with `pearmut add` and served: the annotation
+page returns 200, clips are served as `audio/mpeg`, and a merged item shows the English ASR and the
+Czech output side by side with pre-filled spans on both and instructions labelled per system.
