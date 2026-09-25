@@ -4,7 +4,10 @@
 One interface, several implementations chosen with --backend:
 
   vllm    local inference with vLLM (fast, batched; needs a GPU)
-  einfra  an OpenAI-compatible chat API, e.g. the e-INFRA LLM service (--api-base, --api-key-env)
+  einfra  the e-INFRA LLM service (https://llm.ai.e-infra.cz/v1/) or any other OpenAI-compatible chat
+          API (--api-base). The key is taken from $E_INFRA_API_TOKEN or $CESNET_API_KEY (see
+          --api-key-env). --model accepts the short names of EINFRA_MODELS below, e.g. gpt-oss-120B,
+          GLM, Kimi, DeepSeek, Gemma4, qwen3.8-27b, or any model name the server knows.
   dummy   no model at all: returns an annotation of the first few words of each annotated system,
           for testing the pipeline
 
@@ -33,7 +36,7 @@ class BackendConfig:
     dtype: str = "auto"
     # einfra / any OpenAI-compatible API
     api_base: str = None
-    api_key_env: str = "LLM_API_KEY"
+    api_key_env: str = "E_INFRA_API_TOKEN,CESNET_API_KEY,LLM_API_KEY"
     timeout: float = 120.0
     retries: int = 3
 
@@ -58,11 +61,28 @@ def add_arguments(parser):
     g.add_argument("--max-model-len", type=int, default=None)
     g.add_argument("--dtype", default=BackendConfig.dtype)
     g.add_argument("--api-base", default=os.environ.get("LLM_API_BASE"),
-                   help="base URL of the OpenAI-compatible API (default: $LLM_API_BASE)")
+                   help=f"base URL of the OpenAI-compatible API (default: $LLM_API_BASE, or "
+                        f"{EINFRA_URL} with --backend einfra)")
     g.add_argument("--api-key-env", default=BackendConfig.api_key_env,
-                   help=f"environment variable with the API key (default: {BackendConfig.api_key_env})")
+                   help=f"environment variable(s) with the API key, first non-empty wins "
+                        f"(default: {BackendConfig.api_key_env})")
     g.add_argument("--timeout", type=float, default=BackendConfig.timeout)
     g.add_argument("--retries", type=int, default=BackendConfig.retries)
+
+
+# e-INFRA LLM service (as used in 20-find-bad-translation-divergencies.py)
+EINFRA_URL = "https://llm.ai.e-infra.cz/v1/"
+# short name -> (model name at the API, extra body fields). The "thinking" models (GLM, Kimi,
+# DeepSeek) can spend the whole token budget on hidden reasoning, hence reasoning_effort=low.
+_LOW_REASONING = {"reasoning_effort": "low"}
+EINFRA_MODELS = {
+    "Gemma4": ("gemma4", {}),
+    "gpt-oss-120B": ("gpt-oss-120b", {}),
+    "qwen3.8-27b": ("qwen3.8-27b", {}),
+    "GLM": ("glm", _LOW_REASONING),
+    "Kimi": ("kimi", _LOW_REASONING),
+    "DeepSeek": ("deepseek-v4-flash", _LOW_REASONING),
+}
 
 
 class Backend:
@@ -115,19 +135,24 @@ class OpenAICompatibleBackend(Backend):
 
     def __init__(self, cfg):
         super().__init__(cfg)
-        if not cfg.api_base:
+        base = cfg.api_base or (EINFRA_URL if cfg.backend == "einfra" else None)
+        if not base:
             sys.exit("--api-base (or $LLM_API_BASE) is required for this backend")
-        self.key = os.environ.get(cfg.api_key_env, "")
+        self.url = base.rstrip("/") + "/chat/completions"
+        self.model, self.extra = EINFRA_MODELS.get(cfg.model, (cfg.model, {}))
+        names = [n.strip() for n in cfg.api_key_env.split(",") if n.strip()]
+        self.key = next((os.environ[n] for n in names if os.environ.get(n, "").strip()), "")
         if not self.key:
-            print(f"WARNING: ${cfg.api_key_env} is empty; sending requests without a key",
+            print(f"WARNING: none of ${', $'.join(names)} is set; sending requests without a key",
                   file=sys.stderr)
-        self.url = cfg.api_base.rstrip("/") + "/chat/completions"
+        print(f"{cfg.backend}: {self.url}, model {self.model}"
+              + (f", {self.extra}" if self.extra else ""), file=sys.stderr)
 
     def _one(self, chat, schema):
         import urllib.error
         import urllib.request
-        body = {"model": self.cfg.model, "messages": chat,
-                "temperature": self.cfg.temperature, "max_tokens": self.cfg.max_new_tokens}
+        body = {"model": self.model, "messages": chat, "temperature": self.cfg.temperature,
+                "max_tokens": self.cfg.max_new_tokens, **self.extra}
         if schema and self.cfg.guided_json:
             body["response_format"] = {"type": "json_schema",
                                        "json_schema": {"name": "annotations", "schema": schema,
