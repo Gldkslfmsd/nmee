@@ -1,10 +1,6 @@
 
-To be done.
+AI.úfal works:
 
-Here will be code to run LLM to pre-select harmful errors. Code from Ondřej, Augusting, and Marco should be here.
+python3 40_find_harmful_errors.py --backend einfra --input first3.jsonl --output f.jsonl --show canary_asr canary_cs --annotate canary_cs --api-base https://ai.ufal.mff.cuni.cz/api/v1 --model MAC1.Qwen3.8-Flash-Next-MLX-oQ8-MTP
 
-The codes can be totally separate and duplicate. They only need to keep the normalized jsonl output format that we agreed on.
-
-Example:
-
- - To be done
+The rest: to be done
