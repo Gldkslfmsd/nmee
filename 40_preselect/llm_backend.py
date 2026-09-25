@@ -16,6 +16,7 @@ per chat. Add a new backend by subclassing Backend and registering it in BACKEND
 """
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, fields
@@ -32,8 +33,10 @@ class BackendConfig:
     # vllm
     tensor_parallel_size: int = 1
     gpu_memory_utilization: float = 0.9
-    max_model_len: int = None
+    max_model_len: int = 8192
     dtype: str = "auto"
+    vllm_subprocess: bool = False
+    vllm_plugins: bool = False
     # einfra / any OpenAI-compatible API
     api_base: str = None
     api_key_env: str = "E_INFRA_API_TOKEN,CESNET_API_KEY,LLM_API_KEY"
@@ -58,8 +61,14 @@ def add_arguments(parser):
                    help="do not constrain the output to the JSON schema")
     g.add_argument("--tensor-parallel-size", type=int, default=BackendConfig.tensor_parallel_size)
     g.add_argument("--gpu-memory-utilization", type=float, default=BackendConfig.gpu_memory_utilization)
-    g.add_argument("--max-model-len", type=int, default=None)
+    g.add_argument("--max-model-len", type=int, default=BackendConfig.max_model_len,
+                   help=f"vllm: context length; the default {BackendConfig.max_model_len} is plenty for "
+                        f"one segment and keeps the KV cache small (0 = the model's own maximum)")
     g.add_argument("--dtype", default=BackendConfig.dtype)
+    g.add_argument("--vllm-subprocess", action="store_true",
+                   help="vllm: run the engine in a subprocess (vLLM's default; may fail to init CUDA)")
+    g.add_argument("--vllm-plugins", action="store_true",
+                   help="vllm: load third-party vLLM plugins (NeMo etc.), off by default")
     g.add_argument("--api-base", default=os.environ.get("LLM_API_BASE"),
                    help=f"base URL of the OpenAI-compatible API (default: $LLM_API_BASE, or "
                         f"{EINFRA_URL} with --backend einfra)")
@@ -97,6 +106,14 @@ class Backend:
 class VLLMBackend(Backend):
     def __init__(self, cfg):
         super().__init__(cfg)
+        # In-process engine by default: vLLM's engine subprocess fails to initialise CUDA in some
+        # environments ("CUDA driver initialization failed"), e.g. when `multiprocess` (NeMo) is
+        # installed. --vllm-subprocess restores vLLM's own default.
+        if not cfg.vllm_subprocess:
+            os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+        # third-party vLLM plugins (NeMo registers one) are not needed here and can fail to import
+        if not cfg.vllm_plugins:
+            os.environ.setdefault("VLLM_PLUGINS", "")
         from vllm import LLM
         t0 = time.time()
         kwargs = dict(model=cfg.model, tensor_parallel_size=cfg.tensor_parallel_size,
@@ -110,12 +127,25 @@ class VLLMBackend(Backend):
         from vllm import SamplingParams
         kwargs = dict(temperature=self.cfg.temperature, max_tokens=self.cfg.max_new_tokens)
         if schema and self.cfg.guided_json:
-            try:  # the API for constrained decoding has moved between vLLM versions
-                from vllm.sampling_params import GuidedDecodingParams
-                kwargs["guided_decoding"] = GuidedDecodingParams(json=schema)
+            # the API for constrained decoding has changed between vLLM versions; try newest first
+            try:  # vLLM >= 0.11 / 0.30
+                from vllm.sampling_params import StructuredOutputsParams
+                kwargs["structured_outputs"] = StructuredOutputsParams(json=schema)
             except ImportError:
-                kwargs["guided_json"] = schema
-        return SamplingParams(**kwargs)
+                try:  # vLLM 0.6 - 0.10
+                    from vllm.sampling_params import GuidedDecodingParams
+                    kwargs["guided_decoding"] = GuidedDecodingParams(json=schema)
+                except ImportError:
+                    kwargs["guided_json"] = schema
+        try:
+            return SamplingParams(**kwargs)
+        except TypeError as e:  # unknown keyword: fall back to unconstrained decoding
+            print(f"vllm: constrained decoding not available ({e}); the prompt alone has to keep the "
+                  f"output valid JSON", file=sys.stderr)
+            kwargs.pop("structured_outputs", None)
+            kwargs.pop("guided_decoding", None)
+            kwargs.pop("guided_json", None)
+            return SamplingParams(**kwargs)
 
     def generate(self, chats, schema=None):
         params = self._sampling(schema)
@@ -138,7 +168,12 @@ class OpenAICompatibleBackend(Backend):
         base = cfg.api_base or (EINFRA_URL if cfg.backend == "einfra" else None)
         if not base:
             sys.exit("--api-base (or $LLM_API_BASE) is required for this backend")
-        self.url = base.rstrip("/") + "/chat/completions"
+        self.base = base.rstrip("/")
+        if not re.search(r"/v\d+$", self.base):
+            print(f"note: {self.base} does not end with a version path; OpenAI-compatible servers "
+                  f"usually live at .../v1 -- if requests fail with 404/405, try --api-base "
+                  f"{self.base}/v1", file=sys.stderr)
+        self.url = self.base + "/chat/completions"
         self.model, self.extra = EINFRA_MODELS.get(cfg.model, (cfg.model, {}))
         names = [n.strip() for n in cfg.api_key_env.split(",") if n.strip()]
         self.key = next((os.environ[n] for n in names if os.environ.get(n, "").strip()), "")
@@ -170,12 +205,33 @@ class OpenAICompatibleBackend(Backend):
                 return payload["choices"][0]["message"]["content"]
             except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
                 last = e
+                if isinstance(e, urllib.error.HTTPError) and e.code in (404, 405):
+                    break  # wrong URL: retrying will not help
                 if "response_format" in body and isinstance(e, urllib.error.HTTPError) and e.code == 400:
                     body.pop("response_format")  # server does not support schemas
                     data = json.dumps(body).encode("utf-8")
                 time.sleep(2 ** attempt)
-        print(f"WARNING: request failed after {self.cfg.retries} attempts: {last}", file=sys.stderr)
+        hint = ""
+        import urllib.error as _ue
+        if isinstance(last, _ue.HTTPError):
+            if last.code in (404, 405):
+                hint = (f" -- wrong --api-base? try {self.base}/v1 ; "
+                        f"list the models with: --list-models")
+            elif last.code in (401, 403):
+                hint = f" -- missing or wrong API key (${self.cfg.api_key_env})"
+        print(f"WARNING: request failed after {self.cfg.retries} attempts: {last}{hint}",
+              file=sys.stderr)
         return '{"annotations": []}'
+
+    def list_models(self):
+        """GET {base}/models -- what the server offers."""
+        import urllib.request
+        headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
+        req = urllib.request.Request(self.base + "/models", headers=headers)
+        with urllib.request.urlopen(req, timeout=self.cfg.timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        data = payload.get("data", payload if isinstance(payload, list) else [])
+        return [m.get("id", m) if isinstance(m, dict) else m for m in data]
 
     def generate(self, chats, schema=None):
         from concurrent.futures import ThreadPoolExecutor
@@ -210,4 +266,7 @@ BACKENDS = {"vllm": VLLMBackend, "einfra": OpenAICompatibleBackend, "dummy": Dum
 def get_backend(cfg):
     if cfg.backend not in BACKENDS:
         sys.exit(f"unknown backend {cfg.backend!r} (have: {', '.join(sorted(BACKENDS))})")
+    if cfg.backend == "vllm" and cfg.api_base:
+        sys.exit("--backend vllm loads the model locally and ignores --api-base; for a remote "
+                 "OpenAI-compatible server use --backend einfra --api-base ...")
     return BACKENDS[cfg.backend](cfg)
