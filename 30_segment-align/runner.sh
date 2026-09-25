@@ -15,8 +15,8 @@ if [ "$USER" == "machacek" ]; then
     source p3.12/bin/activate 
 fi
 
-#python3 10_asr_sentences.py $canary_outputs_dir $segmented_systems_dir
-#python3 20_segment_audio.py --audio-dir $orig_audio_dir --translations-dir $segmented_systems_dir $segmented_audio_dir 
+python3 10_asr_sentences.py $canary_outputs_dir $segmented_systems_dir
+python3 20_segment_audio.py --audio-dir $orig_audio_dir --translations-dir $segmented_systems_dir $segmented_audio_dir 
 
 if [ -f $segmented_systems_merged.ok ]; then
     echo "File $segmented_systems_merged.ok already exists, skipping creation."
@@ -46,3 +46,11 @@ for tgt in $canary_target_langs ; do
         --split-method embed --split-window 8  \
         --add $add
 done
+
+if [ $dataset == "earnings-25" ]; then
+    python 35_add_earnings_gold.py --input $segmented_systems_merged \
+        --output $segmented_systems_merged --gold $gold_json \
+        --align-to canary_asr
+else
+    echo "No gold data for dataset $dataset, skipping."
+fi
