@@ -10,7 +10,9 @@ Segment ASR to sentences, segment audio, align target sentences to ASR.
 
 - `30_add_and_align_sentences.py` -- takes output of `10_...`, and adds another target language. Resegments sentences by Moses and aligns them using vecalign
   - better with GPU
-  - needs the same python environment as `../20_systems`, pip install `vecalign` and `mweralign`
+  - needs the same python environment as `../20_systems`
+  - install vecalign: `git clone https://github.com/thompsonb/vecalign ; cd vecalign; uv pip install . -e `
+  - install mweralign: `uv pip install mweralign`
   - `alignments.py` -- used by `30_...`
 
 Usage:

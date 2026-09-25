@@ -127,7 +127,7 @@ def main():
                     help="perl = original split-sentences.perl via mosestokenizer (default); "
                          "python = sentence-splitter port")
     ap.add_argument("--min-dur", type=float, default=1.0,
-                    help="merge sentences shorter than this (seconds) into the shorter neighbour (default 0 = off)")
+                    help="merge sentences shorter than this (seconds) into the shorter neighbour (default 1 = 1 second)")
     ap.add_argument("--how-many", type=int, default=None, help="process only the first N documents")
     args = ap.parse_args()
 

@@ -9,24 +9,28 @@ Usage:
     python segment_audio.py OUT_DIR \
         --audio-dir ~/work/uedin/mtm26/nmee/iwslt26-cs-dev/audio \
         --translations-dir ~/work/uedin/mtm26/nmee/outputs/iwslt26-cs-dev \
-        [--suffix .en.jsonl] [--pad 0.2] [--how-many 3] [--debug-prints DEBUG_DIR]
+        [--suffix .en.jsonl] [--pad 0.2] [--how-many 3] [--debug-prints DEBUG_DIR] [-j JOBS]
 
 --how-many N          process only the first N documents (sorted by name), for debugging
 --debug-prints DIR    write DIR/<doc>.txt with "start<TAB>end<TAB>text" per segment, plus DIR/stats.txt
                       with statistics (durations, shortest segments, empty texts, overlaps, segments
                       outside the audio); the statistics are also printed to stderr
+-j, --jobs N          number of parallel workers (default: number of CPUs)
 
-Clips are always written as WAV. PCM WAV input is cut with the Python standard library (wave); other
-formats (mp3, flac, ...) and WAVs that `wave` can't read are cut with `ffmpeg`, or `sox` if ffmpeg is
-not on PATH (note that sox often lacks mp3 support).
+Clips are always written as WAV. PCM WAV input is cut with the Python standard library (wave), one
+document per worker; other formats (mp3, flac, ...) and WAVs that `wave` can't read are cut with `ffmpeg`,
+or `sox` if ffmpeg is not on PATH (note that sox often lacks mp3 support), one segment per worker.
+The work is subprocess- and I/O-bound, so a thread pool is used.
 """
 import argparse
 import json
+import os
 import shutil
 import statistics
 import subprocess
 import sys
 import wave
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 SHORT_SEC = 0.5      # segments shorter than this are reported as "short"
@@ -46,17 +50,28 @@ def find_audio(audio_dir, stem, exts):
     return None
 
 
+def wave_readable(path):
+    if path.suffix.lower() != ".wav":
+        return False
+    try:
+        with wave.open(str(path), "rb"):
+            return True
+    except (wave.Error, EOFError) as e:
+        print(f"{path}: wave module failed ({e}), using an external tool", file=sys.stderr)
+        return False
+
+
 def audio_duration(path):
     if path.suffix.lower() == ".wav":
         try:
             with wave.open(str(path), "rb") as w:
                 return w.getnframes() / w.getframerate()
-        except wave.Error:
+        except (wave.Error, EOFError):
             pass
     for cmd in (["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
                 ["soxi", "-D", str(path)]):
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            out = subprocess.run(cmd, capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
             return float(out.stdout.strip())
         except (OSError, subprocess.CalledProcessError, ValueError):
             continue
@@ -64,6 +79,7 @@ def audio_duration(path):
 
 
 def cut_with_wave(wav_path, segs, out_dir, stem, pad):
+    """Cut a whole document in-process (sequential reads of one file are fastest)."""
     with wave.open(str(wav_path), "rb") as w:
         params = w.getparams()
         sr, n = w.getframerate(), w.getnframes()
@@ -77,34 +93,17 @@ def cut_with_wave(wav_path, segs, out_dir, stem, pad):
                 o.writeframes(frames)
 
 
-def cut_with_ffmpeg(path, segs, out_dir, stem, pad):
-    for i, s in enumerate(segs):
-        a = max(0.0, s["start"] - pad)
-        dur = max(0.0, (s["end"] + pad) - a)
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{dur:.3f}", "-i", str(path),
-                        str(out_dir / f"{stem}.{i:04d}.wav")], check=True)
-
-
-def cut(path, segs, out_dir, stem, pad):
-    if path.suffix.lower() == ".wav":
-        try:
-            return cut_with_wave(path, segs, out_dir, stem, pad)
-        except wave.Error as e:
-            print(f"{path}: wave module failed ({e}), using an external tool", file=sys.stderr)
-    if shutil.which("ffmpeg"):
-        cut_with_ffmpeg(path, segs, out_dir, stem, pad)
-    elif shutil.which("sox"):
-        cut_with_sox(path, segs, out_dir, stem, pad)
+def cut_one_external(tool, path, seg, out_path, pad):
+    """Cut a single segment with ffmpeg or sox."""
+    a = max(0.0, seg["start"] - pad)
+    dur = max(0.0, (seg["end"] + pad) - a)
+    if tool == "ffmpeg":
+        # -nostdin: parallel ffmpeg processes would otherwise fight over the terminal's stdin
+        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{dur:.3f}",
+               "-i", str(path), str(out_path)]
     else:
-        sys.exit(f"{path}: needs ffmpeg or sox on PATH")
-
-
-def cut_with_sox(wav_path, segs, out_dir, stem, pad):
-    for i, s in enumerate(segs):
-        a = max(0.0, s["start"] - pad)
-        dur = max(0.0, (s["end"] + pad) - a)
-        subprocess.run(["sox", str(wav_path), str(out_dir / f"{stem}.{i:04d}.wav"),
-                        "trim", f"{a:.3f}", f"{dur:.3f}"], check=True)
+        cmd = ["sox", str(path), str(out_path), "trim", f"{a:.3f}", f"{dur:.3f}"]
+    subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
 
 
 # ---------------------------------------------------------------- debug output
@@ -143,6 +142,27 @@ def fmt_stats(durs):
             f"median={statistics.median(durs):.2f}s mean={statistics.mean(durs):.2f}s max={max(durs):.2f}s")
 
 
+# ---------------------------------------------------------------- per-document preparation
+
+def prepare_doc(jf, suffix, audio_dir, exts, debug_dir):
+    """Read segments, locate audio, decide the cutting method and gather debug info (runs in parallel)."""
+    stem = jf.name[: -len(suffix)]
+    wav = find_audio(audio_dir, stem, exts)
+    segs = read_segments(jf)
+    d = {"stem": stem, "wav": wav, "segs": segs, "use_wave": bool(wav) and wave_readable(wav)}
+    if debug_dir:
+        write_tsv(debug_dir / f"{stem}.txt", segs)
+        audio_len = audio_duration(wav) if wav else None
+        durs = [s["end"] - s["start"] for s in segs]
+        probs = doc_problems(stem, segs, audio_len)
+        alen = f"{audio_len:.1f}s" if audio_len is not None else "missing"
+        covered = f" ({sum(x for x in durs if x > 0) / audio_len:.0%} covered)" if audio_len else ""
+        d["durs"] = durs
+        d["probs"] = probs
+        d["doc_line"] = f"{stem}: audio {alen}{covered}; {fmt_stats(durs)}; {len(probs)} issue(s)"
+    return d
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_dir")
@@ -155,6 +175,8 @@ def main():
     ap.add_argument("--how-many", type=int, default=None, help="how many documents to process, for debugging")
     ap.add_argument("--debug-prints", metavar="DIR", default=None,
                     help="write start/end/text TSV per document and statistics into DIR. It is named *.txt so that it can be open in Audacity.")
+    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4,
+                    help="number of parallel workers (default: number of CPUs)")
     args = ap.parse_args()
 
     out_root = Path(args.out_dir)
@@ -170,33 +192,61 @@ def main():
     if args.how_many is not None:
         files = files[: args.how_many]
 
-    all_durs, all_segs, all_probs, doc_lines = [], [], [], []
-    for jf in files:
-        stem = jf.name[: -len(args.suffix)]
-        wav = find_audio(audio_dir, stem, exts)
-        segs = read_segments(jf)
+    ext_tool = "ffmpeg" if shutil.which("ffmpeg") else ("sox" if shutil.which("sox") else None)
 
-        if debug_dir:
-            write_tsv(debug_dir / f"{stem}.txt", segs)
-            audio_len = audio_duration(wav) if wav else None
-            durs = [s["end"] - s["start"] for s in segs]
-            all_durs += durs
-            all_segs += [(s["end"] - s["start"], stem, i, s) for i, s in enumerate(segs)]
-            probs = doc_problems(stem, segs, audio_len)
-            all_probs += probs
-            alen = f"{audio_len:.1f}s" if audio_len is not None else "missing"
-            covered = f" ({sum(d for d in durs if d > 0) / audio_len:.0%} covered)" if audio_len else ""
-            doc_lines.append(f"{stem}: audio {alen}{covered}; {fmt_stats(durs)}; {len(probs)} issue(s)")
+    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as ex:
+        # phase 1: prepare all documents in parallel (map keeps the sorted order for the report)
+        docs = list(ex.map(lambda jf: prepare_doc(jf, args.suffix, audio_dir, exts, debug_dir), files))
 
-        if wav is None:
-            print(f"WARNING: no audio for {stem} in {audio_dir} ({', '.join(exts)})", file=sys.stderr)
-            continue
-        out_dir = out_root / stem
-        out_dir.mkdir(parents=True, exist_ok=True)
-        cut(wav, segs, out_dir, stem, args.pad)
-        print(f"{stem}: {len(segs)} clips -> {out_dir}")
+        # phase 2: build the job list. Whole-document wave jobs go first because they are the
+        # longest single tasks; per-segment ffmpeg/sox jobs then fill up the remaining workers.
+        doc_jobs, seg_jobs, remaining = [], [], {}
+        for d in docs:
+            stem, wav, segs = d["stem"], d["wav"], d["segs"]
+            if wav is None:
+                print(f"WARNING: no audio for {stem} in {audio_dir} ({', '.join(exts)})", file=sys.stderr)
+                continue
+            out_dir = out_root / stem
+            out_dir.mkdir(parents=True, exist_ok=True)
+            d["out_dir"] = out_dir
+            if not segs:
+                print(f"{stem}: 0 clips -> {out_dir}")
+                continue
+            if d["use_wave"]:
+                doc_jobs.append((stem, cut_with_wave, (wav, segs, out_dir, stem, args.pad)))
+                remaining[stem] = 1
+            else:
+                if ext_tool is None:
+                    sys.exit(f"{wav}: needs ffmpeg or sox on PATH")
+                for i, s in enumerate(segs):
+                    seg_jobs.append((stem, cut_one_external,
+                                     (ext_tool, wav, s, out_dir / f"{stem}.{i:04d}.wav", args.pad)))
+                remaining[stem] = len(segs)
+
+        # phase 3: run everything, report each document when its last job finishes
+        by_stem = {d["stem"]: d for d in docs}
+        failed = 0
+        futs = {ex.submit(fn, *a): stem for stem, fn, a in doc_jobs + seg_jobs}
+        for f in as_completed(futs):
+            stem = futs[f]
+            try:
+                f.result()
+            except Exception as e:
+                failed += 1
+                print(f"ERROR in {stem}: {e}", file=sys.stderr)
+            remaining[stem] -= 1
+            if remaining[stem] == 0:
+                d = by_stem[stem]
+                print(f"{stem}: {len(d['segs'])} clips -> {d['out_dir']}")
 
     if debug_dir:
+        all_durs, all_segs, all_probs, doc_lines = [], [], [], []
+        for d in docs:
+            all_durs += d["durs"]
+            all_segs += [(s["end"] - s["start"], d["stem"], i, s) for i, s in enumerate(d["segs"])]
+            all_probs += d["probs"]
+            doc_lines.append(d["doc_line"])
+
         lines = [f"documents: {len(files)}", f"all segments: {fmt_stats(all_durs)}", ""]
         lines.append(f"{N_SHORTEST} shortest segments:")
         for dur, stem, i, s in sorted(all_segs, key=lambda x: x[0])[:N_SHORTEST]:
@@ -218,6 +268,9 @@ def main():
         (debug_dir / "stats.txt").write_text(report, encoding="utf-8")
         print(report, file=sys.stderr)
         print(f"debug output: {debug_dir}/<doc>.txt, {debug_dir}/stats.txt", file=sys.stderr)
+
+    if failed:
+        sys.exit(f"{failed} job(s) failed")
 
 
 if __name__ == "__main__":
