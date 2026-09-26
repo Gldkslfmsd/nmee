@@ -4,10 +4,11 @@
 One interface, several implementations chosen with --backend:
 
   vllm    local inference with vLLM (fast, batched; needs a GPU)
-  einfra  the e-INFRA LLM service (https://llm.ai.e-infra.cz/v1/) or any other OpenAI-compatible chat
-          API (--api-base). The key is taken from $E_INFRA_API_TOKEN or $CESNET_API_KEY (see
-          --api-key-env). --model accepts the short names of EINFRA_MODELS below, e.g. gpt-oss-120B,
-          GLM, Kimi, DeepSeek, Gemma4, qwen3.8-27b, or any model name the server knows.
+  api     any OpenAI-compatible chat API: --api-base is required (e.g. a vLLM server, ÚFAL's
+          https://ai.ufal.mff.cuni.cz/v1, OpenAI itself), --model is passed through as given
+  einfra   the e-INFRA LLM service: same backend with the base URL and the model short names
+          (gpt-oss-120B, GLM, Kimi, DeepSeek, Gemma4, qwen3.8-27b) filled in, and the key taken
+          from $E_INFRA_API_TOKEN or $CESNET_API_KEY
   dummy   no model at all: returns an annotation of the first few words of each annotated system,
           for testing the pipeline
 
@@ -70,8 +71,8 @@ def add_arguments(parser):
     g.add_argument("--vllm-plugins", action="store_true",
                    help="vllm: load third-party vLLM plugins (NeMo etc.), off by default")
     g.add_argument("--api-base", default=os.environ.get("LLM_API_BASE"),
-                   help=f"base URL of the OpenAI-compatible API (default: $LLM_API_BASE, or "
-                        f"{EINFRA_URL} with --backend einfra)")
+                   help=f"base URL of the OpenAI-compatible API, usually ending in /v1 "
+                        f"(default: $LLM_API_BASE; --backend einfra uses {EINFRA_URL})")
     g.add_argument("--api-key-env", default=BackendConfig.api_key_env,
                    help=f"environment variable(s) with the API key, first non-empty wins "
                         f"(default: {BackendConfig.api_key_env})")
@@ -79,7 +80,7 @@ def add_arguments(parser):
     g.add_argument("--retries", type=int, default=BackendConfig.retries)
 
 
-# e-INFRA LLM service (as used in 20-find-bad-translation-divergencies.py)
+# e-INFRA LLM service (URL and model names as used in 20-find-bad-translation-divergencies.py)
 EINFRA_URL = "https://llm.ai.e-infra.cz/v1/"
 # short name -> (model name at the API, extra body fields). The "thinking" models (GLM, Kimi,
 # DeepSeek) can spend the whole token budget on hidden reasoning, hence reasoning_effort=low.
@@ -160,21 +161,26 @@ class VLLMBackend(Backend):
         return out
 
 
-class OpenAICompatibleBackend(Backend):
-    """Any OpenAI-compatible /chat/completions endpoint (e-INFRA, vLLM server, OpenAI itself)."""
+class APIBackend(Backend):
+    """Any OpenAI-compatible /chat/completions endpoint; --api-base is required.
+    Subclasses of it only fill in a default URL and a table of model short names."""
+
+    DEFAULT_URL = None
+    MODELS = {}
 
     def __init__(self, cfg):
         super().__init__(cfg)
-        base = cfg.api_base or (EINFRA_URL if cfg.backend == "einfra" else None)
+        base = cfg.api_base or self.DEFAULT_URL
         if not base:
-            sys.exit("--api-base (or $LLM_API_BASE) is required for this backend")
+            sys.exit("--api-base (or $LLM_API_BASE) is required for --backend api; "
+                     "--backend einfra has the e-INFRA URL built in")
         self.base = base.rstrip("/")
         if not re.search(r"/v\d+$", self.base):
             print(f"note: {self.base} does not end with a version path; OpenAI-compatible servers "
                   f"usually live at .../v1 -- if requests fail with 404/405, try --api-base "
                   f"{self.base}/v1", file=sys.stderr)
         self.url = self.base + "/chat/completions"
-        self.model, self.extra = EINFRA_MODELS.get(cfg.model, (cfg.model, {}))
+        self.model, self.extra = self.MODELS.get(cfg.model, (cfg.model, {}))
         names = [n.strip() for n in cfg.api_key_env.split(",") if n.strip()]
         self.key = next((os.environ[n] for n in names if os.environ.get(n, "").strip()), "")
         if not self.key:
@@ -260,13 +266,23 @@ class DummyBackend(Backend):
         return out
 
 
-BACKENDS = {"vllm": VLLMBackend, "einfra": OpenAICompatibleBackend, "dummy": DummyBackend}
+class EInfraBackend(APIBackend):
+    """The e-INFRA LLM service: the API backend with its URL and model names filled in."""
+
+    DEFAULT_URL = EINFRA_URL
+    MODELS = EINFRA_MODELS
+
+
+BACKENDS = {"vllm": VLLMBackend, "api": APIBackend, "einfra": EInfraBackend, "dummy": DummyBackend}
 
 
 def get_backend(cfg):
     if cfg.backend not in BACKENDS:
         sys.exit(f"unknown backend {cfg.backend!r} (have: {', '.join(sorted(BACKENDS))})")
+    if cfg.backend == "einfra" and cfg.api_base:
+        print(f"note: --backend einfra with --api-base {cfg.api_base} (not the e-INFRA URL); "
+              f"--backend api is the plain OpenAI-compatible client", file=sys.stderr)
     if cfg.backend == "vllm" and cfg.api_base:
         sys.exit("--backend vllm loads the model locally and ignores --api-base; for a remote "
-                 "OpenAI-compatible server use --backend einfra --api-base ...")
+                 "OpenAI-compatible server use --backend api --api-base ...")
     return BACKENDS[cfg.backend](cfg)
