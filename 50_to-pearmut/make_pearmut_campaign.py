@@ -10,11 +10,11 @@ span:
  "annotator": {...}}
 
 Only the fields Pearmut actually needs are written to the campaign: per item "item_id", "src",
-"tgt", "instructions" and (unless --no-prefill) "error_spans". Columns of one item: the ASR
+"tgt", "instructions" and (with --prefill) "error_spans". Columns of one item: the ASR
 transcript first (--no-asr-column turns it off), then the target systems that have a flagged span
 in this segment, at most --max-systems of them (0 = all). The clip and the gold transcript are the
 source side; every flagged span is described in the item's instructions (as an HTML table, see
-instruction_html.py) and, unless --no-prefill, pre-highlighted in its column. Columns are labelled
+instruction_html.py) and, with --prefill (for view-only debugging), pre-highlighted in its column. Columns are labelled
 with the system name (--show-model-names) and not shuffled.
 
 Reference translations come from a separate file: --references-file is the aligned JSONL of
@@ -111,7 +111,7 @@ def columns(rec, args):
             continue
         # end_i is inclusive; the NMEE protocol has no severity buttons, so severity stays unset
         spans[system].append({"start_i": s0, "end_i": s0 + len(t["span"]) - 1,
-                              "severity": args.prefill_severity, "category": None})
+                              "severity": None, "category": None})
     return tgt, spans
 
 
@@ -145,9 +145,9 @@ def build_item(rec, args, refs, assets_url, stats):
         "item_id": f"{rec.get('document')}#{audio.stem.split('.')[-1]}",
         "src": src,
         "tgt": tgt,
-        "instructions": instruction_html(rec, rec["targets"]),
+        "instructions": instruction_html(rec, rec["targets"], tgt),
     }
-    if spans and not args.no_prefill:
+    if spans and args.prefill:
         item["error_spans"] = dict(spans)
     stats["items"] += 1
     stats["spans"] += sum(len(v) for v in spans.values())
@@ -184,10 +184,8 @@ def main():
                     help="system names in --references-file to show as references, e.g. reference_cs")
 
     # pre-filled spans
-    ap.add_argument("--no-prefill", action="store_true", help="do not pre-highlight the flagged spans")
-    ap.add_argument("--prefill-severity", default=None,
-                    help="severity stored in the pre-filled spans (default: none; the NMEE protocol "
-                         "has no severity buttons)")
+    ap.add_argument("--prefill", action="store_true",
+                    help="pre-highlight the flagged spans (default: off)")
 
     # campaign
     ap.add_argument("--template", default="../custom_nmee_demo.json",
@@ -237,6 +235,10 @@ def main():
         info["shuffle"] = args.shuffle == "on"
     if args.show_model_names != "keep":
         info["show_model_names"] = args.show_model_names == "on"
+    if args.prefill:
+        info["instructions"] = (info.get("instructions", "")
+            + '<p style="color: red;"><b>The spans are pre-filled because this is view-only '
+              'for debugging. Do not annotate.</b></p>')
 
     json.dump({"info": info, "campaign_id": args.campaign_id, "data": tasks},
               open(args.output, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
