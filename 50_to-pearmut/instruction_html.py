@@ -41,11 +41,11 @@ def instruction_html(rec, targets):
         for s in systems) + "</tr>")
 
     parts.append(row("<b>Suggested harmful error span</b>", [
-        cell(s, lambda t: f"&quot;{esc(t['span'])}&quot;" if t.get("span")
-             else f"<i>missing: &quot;{esc(t.get('intended', ''))}&quot;</i>")
+        cell(s, lambda t: f"{esc(t['span'])}" if t.get("span")
+             else f"<i>missing: {esc(t.get('intended', ''))}</i>")
         for s in systems]))
     parts.append(row("<b>Intended translation</b>", [
-        cell(s, lambda t: f"&quot;{esc(t.get('intended', ''))}&quot;")
+        cell(s, lambda t: f"{esc(t.get('intended', ''))}")
         for s in systems]))
     parts.append(row("<b>Harm type</b>", [
         cell(s, lambda t: f"<i>{esc(', '.join(t.get('harm_types', [])))}</i>")

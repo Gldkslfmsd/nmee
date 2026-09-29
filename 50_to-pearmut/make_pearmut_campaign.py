@@ -36,15 +36,8 @@ from pathlib import Path
 
 from instruction_html import instruction_html, esc
 
-HERE = Path(__file__).resolve().parent
-TEMPLATE_CANDIDATES = [HERE / "custom_nmee_demo.json", HERE.parent / "custom_nmee_demo.json",
-                       HERE.parent.parent / "custom_nmee_demo.json"]
 MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg",
         ".m4a": "audio/mp4", ".opus": "audio/ogg"}
-
-
-def default_template():
-    return next((str(p) for p in TEMPLATE_CANDIDATES if p.exists()), None)
 
 
 # ---------------------------------------------------------------- references
@@ -160,15 +153,6 @@ def build_item(rec, args, refs, assets_url, stats):
     stats["spans"] += sum(len(v) for v in spans.values())
     return item
 
-
-def clean_info(info):
-    """Drop keys that merely repeat protocol defaults."""
-    for key in ("sliders", "mqm_severities"):
-        if info.get(key) == []:
-            info.pop(key, None)
-    return info
-
-
 # ---------------------------------------------------------------- CLI
 
 def main():
@@ -206,7 +190,7 @@ def main():
                          "has no severity buttons)")
 
     # campaign
-    ap.add_argument("--template", default=default_template(),
+    ap.add_argument("--template", default="../custom_nmee_demo.json",
                     help="campaign JSON whose \"info\" block is copied verbatim "
                          "(default: custom_nmee_demo.json next to this script)")
     ap.add_argument("--users", type=int, default=1, help="number of annotator tasks (default: 1)")
@@ -248,7 +232,7 @@ def main():
     else:
         tasks = [documents for _ in range(args.users)]
 
-    info = clean_info(json.load(open(args.template, encoding="utf-8"))["info"])
+    info = json.load(open(args.template, encoding="utf-8"))["info"]
     if args.shuffle != "keep":
         info["shuffle"] = args.shuffle == "on"
     if args.show_model_names != "keep":
