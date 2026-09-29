@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Build a Pearmut campaign from flagged harmful errors (the custom NMEE protocol).
-
 Merges the IWSLT and the Earnings25 campaign builders. Input is one JSONL from the LLM annotation
 (40_find_harmful_errors.py) or from any other flagger, one line per segment with at least one flagged
 span:
+{"document", "dataset", "src_language", "audio", "beg", "end", "segmented_by",
+ "asr": "...", "asr_system": "canary_asr", "gold_transcript": "...",
+ "targets": [{"tgt_lan", "system", "text", "span", "span_start", "span_end", "intended",
+              "harm_types", "harmfulness", "explanation", "error_source", ...}],
+ "annotator": {...}}
 
-  {"document", "dataset", "src_language", "audio", "beg", "end", "segmented_by",
-   "asr": "...", "asr_system": "canary_asr", "gold_transcript": "...",
-   "targets": [{"tgt_lan", "system", "text", "span", "span_start", "span_end", "intended",
-                "harm_types", "harmfulness", "explanation", "error_source", ...}],
-   "annotator": {...}}
-
-Columns of one Pearmut item: the ASR transcript first (--no-asr-column turns it off), then the target
-systems that have a flagged span in this segment, at most --max-systems of them (0 = all). The clip
-and the gold transcript are the source side; every flagged span is described in the item's
-instructions and, unless --no-prefill, pre-highlighted in its column. Columns are labelled with the
-system name (--show-model-names) and not shuffled.
+Only the fields Pearmut actually needs are written to the campaign: per item "item_id", "src",
+"tgt", "instructions" and (unless --no-prefill) "error_spans". Columns of one item: the ASR
+transcript first (--no-asr-column turns it off), then the target systems that have a flagged span
+in this segment, at most --max-systems of them (0 = all). The clip and the gold transcript are the
+source side; every flagged span is described in the item's instructions and, unless --no-prefill,
+pre-highlighted in its column. Columns are labelled with the system name (--show-model-names) and
+not shuffled.
 
 Reference translations come from a separate file: --references-file is the aligned JSONL of
 30_add_and_align_sentences.py (with "text" per system), and --references names the systems in it that
@@ -23,9 +23,9 @@ hold references, e.g. --references reference_cs reference_de. Segments are match
 start time.
 
 Usage:
-    python make_pearmut_campaign.py harmful.jsonl --clips-dir .. \\
-        --harmfulness 3 --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
-    pearmut add -o campaign.json
+python make_pearmut_campaign.py harmful.jsonl --clips-dir .. \\
+    --harmfulness 3 --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
+pearmut add -o campaign.json
 """
 import argparse
 import html
@@ -48,26 +48,6 @@ def esc(s):
 
 def default_template():
     return next((str(p) for p in TEMPLATE_CANDIDATES if p.exists()), None)
-
-
-# ---------------------------------------------------------------- selecting the flagged spans
-
-def select(targets, args):
-    """Filter the flagged spans of one segment."""
-    out = targets
-    if args.harmfulness is not None:
-        out = [t for t in out if t.get("harmfulness") is None or t["harmfulness"] >= args.harmfulness]
-    if args.confidence != "all":
-        out = [t for t in out if t.get("confidence", args.confidence) == args.confidence]
-    if args.langs:
-        out = [t for t in out if t.get("tgt_lan") in args.langs]
-    if args.sources:
-        out = [t for t in out if t.get("source", "llm") in args.sources]
-    if args.min_models > 1:
-        out = [t for t in out if t.get("num_models_reporting", args.min_models) >= args.min_models]
-    if args.harm_types:
-        out = [t for t in out if set(t.get("harm_types", [])) & args.harm_types]
-    return out
 
 
 # ---------------------------------------------------------------- references
@@ -96,7 +76,21 @@ def find_reference(refs, rec, tolerance=0.05):
     return {}
 
 
-# ---------------------------------------------------------------- one item
+# ---------------------------------------------------------------- selecting the flagged spans
+
+def select(targets, args):
+    """Filter the flagged spans of one segment."""
+    out = targets
+    if args.harmfulness is not None:
+        out = [t for t in out if t.get("harmfulness") is None or t["harmfulness"] >= args.harmfulness]
+    if args.langs:
+        out = [t for t in out if t.get("tgt_lan") in args.langs]
+    if args.sources:
+        out = [t for t in out if t.get("source", "llm") in args.sources]
+    if args.min_models > 1:
+        out = [t for t in out if t.get("num_models_reporting", args.min_models) >= args.min_models]
+    return out
+
 
 def instruction_html(rec, targets, args, multi_system):
     parts = []
@@ -107,17 +101,17 @@ def instruction_html(rec, targets, args, multi_system):
             n = t.get("num_models_reporting", 1)
             models = ", ".join(t.get("models_reporting", [])) or "?"
             what = ("<b>whole output flagged</b> (no span pinpointed)" if t.get("span_whole_output")
-                    else f"“{esc(t['span'])}”")
+                    else f"\"{esc(t['span'])}\"")
             cls = f" {esc(t['error_class'])};" if t.get("error_class") else ""
             parts.append(f"{who}<b>Divergence ({n} model{'s' if n != 1 else ''}):</b> {what}."
                          f"<i>{cls} {esc(models)}.</i> {esc(t.get('explanation', ''))}")
             continue
         if t.get("span"):
-            what = f"“{esc(t['span'])}” → intended: “{esc(t.get('intended', ''))}”"
+            what = f"\"{esc(t['span'])}\" → intended: \"{esc(t.get('intended', ''))}\""
         else:  # pure deletion: nothing to quote, the words are simply absent
-            what = f"missing: “{esc(t.get('intended', ''))}”"
+            what = f"missing: \"{esc(t.get('intended', ''))}\""
         grade = t.get("harmfulness")
-        head = f"harmfulness {grade}/5" if grade is not None else t.get("confidence", "suggested")
+        head = f"harmfulness {grade}/5" if grade is not None else "suggested"
         parts.append(f"{who}<b>Suggested ({esc(head)}):</b> {what}. "
                      f"<i>{esc(', '.join(t.get('harm_types', [])))}; "
                      f"likely source: {esc(t.get('error_source', 'unknown'))}.</i> "
@@ -188,27 +182,27 @@ def build_item(rec, args, refs, assets_url, stats):
     tgt, spans = columns(rec, args)
     if not tgt:
         return None
+
+    # only the fields Pearmut consumes; anything else would just bloat the logs
     item = {
         "item_id": f"{rec.get('document')}#{audio.stem.split('.')[-1]}",
         "src": src,
         "tgt": tgt,
         "instructions": instruction_html(rec, rec["targets"], args, len(tgt) > 1),
-        # extra keys are kept verbatim in the annotation logs
-        "document": rec.get("document"), "dataset": rec.get("dataset"),
-        "src_language": rec.get("src_language"), "segmented_by": rec.get("segmented_by"),
-        "audio": rec.get("audio"), "beg": rec.get("beg"), "end": rec.get("end"),
-        "asr": rec.get("asr"), "gold_transcript": rec.get("gold_transcript"),
-        "targets": rec["targets"], "annotator": rec.get("annotator"),
     }
-    if args.slim:
-        for k in ("asr", "gold_transcript", "targets", "annotator", "dataset", "src_language",
-                  "segmented_by"):
-            item.pop(k, None)
     if spans and not args.no_prefill:
         item["error_spans"] = dict(spans)
     stats["items"] += 1
     stats["spans"] += sum(len(v) for v in spans.values())
     return item
+
+
+def clean_info(info):
+    """Drop keys that merely repeat protocol defaults."""
+    for key in ("sliders", "mqm_severities"):
+        if info.get(key) == []:
+            info.pop(key, None)
+    return info
 
 
 # ---------------------------------------------------------------- CLI
@@ -222,16 +216,15 @@ def main():
     ap.add_argument("--assets-url", help="URL prefix for clips (default: ./assets/<campaign-id>)")
     ap.add_argument("--copy-assets", metavar="ASSETS_DIR",
                     help="copy the needed clips to ASSETS_DIR/<campaign-id>/")
+
     # what to keep
     ap.add_argument("--harmfulness", type=int, choices=range(0, 6), metavar="0-5",
                     help="keep only spans with harmfulness >= this (spans without one are kept)")
-    ap.add_argument("--confidence", choices=["all", "harmful", "borderline"], default="all",
-                    help="for annotations that carry a confidence instead of a harmfulness")
     ap.add_argument("--lang", help="comma-separated target languages to keep, e.g. cs or cs,de")
-    ap.add_argument("--harm-type", help="comma-separated harm types to keep")
     ap.add_argument("--source", help="comma-separated annotation sources, e.g. llm,dspy-divergencies")
     ap.add_argument("--min-models", type=int, default=1,
                     help="keep divergence spans reported by at least this many models (default: 1)")
+
     # columns
     ap.add_argument("--max-systems", type=int, default=2,
                     help="how many target systems per item, in the order they are flagged "
@@ -244,11 +237,13 @@ def main():
                                               "the reference translations in \"text\"")
     ap.add_argument("--references", nargs="+", default=[],
                     help="system names in --references-file to show as references, e.g. reference_cs")
+
     # pre-filled spans
     ap.add_argument("--no-prefill", action="store_true", help="do not pre-highlight the flagged spans")
     ap.add_argument("--prefill-severity", default=None,
                     help="severity stored in the pre-filled spans (default: none; the NMEE protocol "
                          "has no severity buttons)")
+
     # campaign
     ap.add_argument("--template", default=default_template(),
                     help="campaign JSON whose \"info\" block is copied verbatim "
@@ -261,16 +256,12 @@ def main():
                          "shuffling them only confuses the annotator (default: off)")
     ap.add_argument("--show-model-names", choices=["keep", "on", "off"], default="on",
                     help="label each column with its system name (default: on)")
-    ap.add_argument("--slim", action="store_true",
-                    help="omit the echoed targets/asr/gold from each item; Pearmut keeps extra keys in "
-                         "the logs, which roughly quadruples the campaign file")
     args = ap.parse_args()
 
     if not args.template:
         sys.exit("no --template given and no custom_nmee_demo.json found next to this script")
     args.langs = set(args.lang.split(",")) if args.lang else None
     args.sources = set(args.source.split(",")) if args.source else None
-    args.harm_types = set(args.harm_type.split(",")) if args.harm_type else None
     assets_url = (args.assets_url or f"./assets/{args.campaign_id}").rstrip("/")
     refs = (load_references(args.references_file, args.references)
             if args.references_file and args.references else None)
@@ -288,7 +279,7 @@ def main():
     stats, documents = defaultdict(int), []
     for doc in sorted(by_doc):
         items = [it for it in (build_item(r, args, refs, assets_url, stats)
-                               for r in sorted(by_doc[doc], key=lambda r: r.get("beg") or 0)) if it]
+                                for r in sorted(by_doc[doc], key=lambda r: r.get("beg") or 0)) if it]
         if items:
             documents.append(items)
 
@@ -297,17 +288,18 @@ def main():
     else:
         tasks = [documents for _ in range(args.users)]
 
-    info = json.load(open(args.template, encoding="utf-8"))["info"]
+    info = clean_info(json.load(open(args.template, encoding="utf-8"))["info"])
     if args.shuffle != "keep":
         info["shuffle"] = args.shuffle == "on"
     if args.show_model_names != "keep":
         info["show_model_names"] = args.show_model_names == "on"
+
     json.dump({"info": info, "campaign_id": args.campaign_id, "data": tasks},
               open(args.output, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
     if args.copy_assets:
         print(f"clips copied to {Path(args.copy_assets).resolve() / args.campaign_id}", file=sys.stderr)
-    print(f"clips referenced as {assets_url}/<document>/<clip>", file=sys.stderr)
+        print(f"clips referenced as {assets_url}/<document>/<clip>", file=sys.stderr)
     if stats["missing clips"]:
         print(f"WARNING: {stats['missing clips']} clip(s) not found (--clips-dir {args.clips_dir})",
               file=sys.stderr)
