@@ -13,9 +13,9 @@ Only the fields Pearmut actually needs are written to the campaign: per item "it
 "tgt", "instructions" and (unless --no-prefill) "error_spans". Columns of one item: the ASR
 transcript first (--no-asr-column turns it off), then the target systems that have a flagged span
 in this segment, at most --max-systems of them (0 = all). The clip and the gold transcript are the
-source side; every flagged span is described in the item's instructions and, unless --no-prefill,
-pre-highlighted in its column. Columns are labelled with the system name (--show-model-names) and
-not shuffled.
+source side; every flagged span is described in the item's instructions (as an HTML table, see
+instruction_html.py) and, unless --no-prefill, pre-highlighted in its column. Columns are labelled
+with the system name (--show-model-names) and not shuffled.
 
 Reference translations come from a separate file: --references-file is the aligned JSONL of
 30_add_and_align_sentences.py (with "text" per system), and --references names the systems in it that
@@ -24,26 +24,23 @@ start time.
 
 Usage:
 python make_pearmut_campaign.py harmful.jsonl --clips-dir .. \\
-    --harmfulness 3 --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
+    --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
 pearmut add -o campaign.json
 """
 import argparse
-import html
 import json
 import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
 
+from instruction_html import instruction_html, esc
+
 HERE = Path(__file__).resolve().parent
 TEMPLATE_CANDIDATES = [HERE / "custom_nmee_demo.json", HERE.parent / "custom_nmee_demo.json",
                        HERE.parent.parent / "custom_nmee_demo.json"]
 MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg",
         ".m4a": "audio/mp4", ".opus": "audio/ogg"}
-
-
-def esc(s):
-    return html.escape(str(s), quote=False)
 
 
 def default_template():
@@ -85,40 +82,7 @@ def select(targets, args):
         out = [t for t in out if t.get("harmfulness") is None or t["harmfulness"] >= args.harmfulness]
     if args.langs:
         out = [t for t in out if t.get("tgt_lan") in args.langs]
-    if args.sources:
-        out = [t for t in out if t.get("source", "llm") in args.sources]
-    if args.min_models > 1:
-        out = [t for t in out if t.get("num_models_reporting", args.min_models) >= args.min_models]
     return out
-
-
-def instruction_html(rec, targets, args, multi_system):
-    parts = []
-    for t in targets:
-        who = f"[{esc(t['system'])}] " if multi_system else ""
-        if t.get("source") == "dspy-divergencies":
-            # a vote of several LLMs with its own taxonomy; harm_types there is always ["Other"]
-            n = t.get("num_models_reporting", 1)
-            models = ", ".join(t.get("models_reporting", [])) or "?"
-            what = ("<b>whole output flagged</b> (no span pinpointed)" if t.get("span_whole_output")
-                    else f"\"{esc(t['span'])}\"")
-            cls = f" {esc(t['error_class'])};" if t.get("error_class") else ""
-            parts.append(f"{who}<b>Divergence ({n} model{'s' if n != 1 else ''}):</b> {what}."
-                         f"<i>{cls} {esc(models)}.</i> {esc(t.get('explanation', ''))}")
-            continue
-        if t.get("span"):
-            what = f"\"{esc(t['span'])}\" → intended: \"{esc(t.get('intended', ''))}\""
-        else:  # pure deletion: nothing to quote, the words are simply absent
-            what = f"missing: \"{esc(t.get('intended', ''))}\""
-        grade = t.get("harmfulness")
-        head = f"harmfulness {grade}/5" if grade is not None else "suggested"
-        parts.append(f"{who}<b>Suggested ({esc(head)}):</b> {what}. "
-                     f"<i>{esc(', '.join(t.get('harm_types', [])))}; "
-                     f"likely source: {esc(t.get('error_source', 'unknown'))}.</i> "
-                     f"{esc(t.get('explanation', ''))}")
-    if args.show_asr and rec.get("asr"):
-        parts.append(f"<small>ASR: {esc(rec['asr'])}</small>")
-    return "<br>".join(parts)
 
 
 def columns(rec, args):
@@ -188,7 +152,7 @@ def build_item(rec, args, refs, assets_url, stats):
         "item_id": f"{rec.get('document')}#{audio.stem.split('.')[-1]}",
         "src": src,
         "tgt": tgt,
-        "instructions": instruction_html(rec, rec["targets"], args, len(tgt) > 1),
+        "instructions": instruction_html(rec, rec["targets"]),
     }
     if spans and not args.no_prefill:
         item["error_spans"] = dict(spans)
@@ -220,10 +184,8 @@ def main():
     # what to keep
     ap.add_argument("--harmfulness", type=int, choices=range(0, 6), metavar="0-5",
                     help="keep only spans with harmfulness >= this (spans without one are kept)")
-    ap.add_argument("--lang", help="comma-separated target languages to keep, e.g. cs or cs,de")
-    ap.add_argument("--source", help="comma-separated annotation sources, e.g. llm,dspy-divergencies")
-    ap.add_argument("--min-models", type=int, default=1,
-                    help="keep divergence spans reported by at least this many models (default: 1)")
+    ap.add_argument("--lang", help="comma-separated target languages to keep, e.g. cs or cs,de "
+                                   "(default: all)")
 
     # columns
     ap.add_argument("--max-systems", type=int, default=2,
@@ -232,7 +194,6 @@ def main():
     ap.add_argument("--no-asr-column", action="store_true",
                     help="do not show the ASR transcript as the first column")
     ap.add_argument("--no-gold", action="store_true", help="do not show the gold transcript")
-    ap.add_argument("--show-asr", action="store_true", help="repeat the ASR text in the instructions")
     ap.add_argument("--references-file", help="aligned JSONL (30_add_and_align_sentences.py) holding "
                                               "the reference translations in \"text\"")
     ap.add_argument("--references", nargs="+", default=[],
@@ -261,7 +222,6 @@ def main():
     if not args.template:
         sys.exit("no --template given and no custom_nmee_demo.json found next to this script")
     args.langs = set(args.lang.split(",")) if args.lang else None
-    args.sources = set(args.source.split(",")) if args.source else None
     assets_url = (args.assets_url or f"./assets/{args.campaign_id}").rstrip("/")
     refs = (load_references(args.references_file, args.references)
             if args.references_file and args.references else None)
