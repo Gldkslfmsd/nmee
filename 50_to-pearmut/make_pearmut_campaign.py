@@ -35,6 +35,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from instruction_html import instruction_html, esc
+from nmee_protocol_v5_info import info as nmee_protocol_info
 
 MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg",
         ".m4a": "audio/mp4", ".opus": "audio/ogg"}
@@ -230,14 +231,14 @@ def main():
     else:
         tasks = [documents for _ in range(args.users)]
 
-    info = json.load(open(args.template, encoding="utf-8"))["info"]
+    info = nmee_protocol_info
     if args.shuffle != "keep":
         info["shuffle"] = args.shuffle == "on"
     if args.show_model_names != "keep":
         info["show_model_names"] = args.show_model_names == "on"
     if args.prefill:
         info["instructions"] = (info.get("instructions", "")
-            + '<p style="color: red;"><b>The spans are pre-filled because this is view-only '
+            + '\n\n<p style="color: red;"><b>The spans are pre-filled because this is view-only '
               'for debugging. Do not annotate.</b></p>')
 
     json.dump({"info": info, "campaign_id": args.campaign_id, "data": tasks},
