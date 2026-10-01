@@ -35,10 +35,19 @@ from collections import defaultdict
 from pathlib import Path
 
 from instruction_html import instruction_html, esc
-from nmee_protocol_v5_info import info as nmee_protocol_info
+from nmee_protocol_v6_info import info as nmee_protocol_info
 
 MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg",
         ".m4a": "audio/mp4", ".opus": "audio/ogg"}
+
+GRAY = "#555"
+
+
+def note_block(label, text):
+    """Italic, smaller block with a gray label, used for the gold transcript and the references."""
+    return (f'<div style="font-style: italic; font-size: 0.85em;">'
+            f'<span style="color: {GRAY};">{label}</span><br>'
+            f'{esc(text)}</div>')
 
 
 # ---------------------------------------------------------------- references
@@ -133,9 +142,9 @@ def build_item(rec, args, refs, assets_url, stats):
     src = (f'<audio controls src="{assets_url}/{rel.as_posix()}" '
            f'type="{MIME.get(audio.suffix.lower(), "audio/wav")}"></audio>')
     if rec.get("gold_transcript") and not args.no_gold:
-        src += f"<br><i>Gold transcript:</i><br>{esc(rec['gold_transcript'])}"
+        src += note_block("Gold transcript:", rec["gold_transcript"])
     for field, text in (find_reference(refs, rec).items() if refs else []):
-        src += f"<br><i>Reference ({esc(field)}):</i><br>{esc(text)}"
+        src += note_block(f"Reference ({esc(field)}):", text)
 
     tgt, spans = columns(rec, args)
     if not tgt:

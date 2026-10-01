@@ -1,0 +1,100 @@
+<p>
+	<b>Brief summary:</b> Highlight errors in transcription or translation that are also
+	<b>harmful</b>, i.e. they would
+	<b>cause a problem beyond the misunderstanding itself</b>: someone would have to correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it.
+</p>
+<p>Below are audio segments and translations. Your task is to
+	<b>highlight spans that contain a harmful error</b>.
+</p>
+<details>
+	<summary>
+		<b>Full instructions</b> (click to expand)
+	</summary>
+	<p>You can assume a live communication event with a speaker and an audience where the translation is displayed on a large screen in the room, and the audience reads it.</p>
+	<h3>Example situation</h3>
+	<p>The conference “Média a Ukrajina” (Media and Ukraine) took place in Prague on June 22, 2023. The main topic was the role of public-service media in the war in Ukraine. Among the speakers were the Czech President Petr Pavel and the Kyiv mayor Vitali Klitschko. The programme was also broadcasted on Czech Radio.</p>
+	<h3>Examples of harmful errors</h3>
+	<p>
+		<b>False attribution:</b> the translation gives a person the wrong identity, gender, role, relationship, or characteristics. Examples:
+	</p>
+	<ul>
+		<li>intended “I'd like to thank Andrea for
+			<b>her</b> introductory speech” → output “…for
+			<span style="background: #ffa6a6">his</span> introductory speech.” Andrea is a woman.
+		</li>
+	</ul>
+	<p>
+		<b>Offensive:</b> a proper name is mishandled, a name is declined into the wrong gender, or the output is disrespectful to a person or group. Examples:
+	</p>
+	<ul>
+		<li>intended “Aisha Khan” → output “
+			<span style="background: #ffa6a6">asylum con</span>”. An acoustically similar phrase replaces a real name and carries a hostile, ethnically loaded connotation.
+		</li>
+	</ul>
+	<p>
+		<b>Embarrassing / laughable:</b> the error introduces explicit, absurd or unintentionally funny content. Examples:
+	</p>
+	<ul>
+		<li>intended “public service media” → output “
+			<span style="background: #ffa6a6">pubic</span> service media”
+		</li>
+	</ul>
+	<p>
+		<b>Derailing / contresens:</b> the output is shocking or unexpected, or it conveys a false or opposite message that still sounds plausible. Examples:
+	</p>
+	<ul>
+		<li>intended “We won't end the war tomorrow” → output “We
+			<span style="background: #ffa6a6">want</span> to end the war tomorrow”. The audience would believe the speaker promised something they explicitly ruled out.
+		</li>
+	</ul>
+	<p>
+		<b>Safety / health / legal risk:</b> the error has an immediate real-world consequence in this situation, beyond the general risk of being misinformed. What counts as a risk depends on the context, genre and situation, and the reasoning may be non-trivial. Examples:
+	</p>
+	<ul>
+		<li>intended “we are 5 km from the front” → output “we are
+			<span style="background: #ffa6a6">500</span> km from the front”. Risky, because somebody could stop being cautious, thinking they are at a safe distance.
+		</li>
+		<li>
+			<i>Negative example:</i> intended “we are 500 km from the front” → output “we are
+			<span style="background: #ffa6a6">5</span> km from the front”. Somebody could be overly cautious, but it would not be a safety risk.
+		</li>
+	</ul>
+	<p>
+		<b>Other</b>: this list of harm types may not be complete, you may annotate other types.
+	</p>
+</details>
+<h3>Step by step instructions:</h3>
+
+<ul>
+	<li>
+		<b>Listen and read:</b>
+		Listen to the audio and read all the systems outputs in white boxes, the translations or transcript in the original language.
+	</li>
+	<li>
+		<b>Supportive text:</b>
+		The text in italics or in gray is there only to help you decide faster, and you do not have to read it.
+		It may be a table with AI-suggestions and a "gold" transcript or translation written by humans.
+		Both can be wrong, so always trust the audio over them.
+	</li>
+	<li>
+		<b>Decide about harmful errors.</b> For each system output, do one of the following:
+		<ol>
+			<li>
+				Either highlight <b>[no harm]</b>, if there is no harmful error in the system output. For instance, there may be a "small", harmless error, or correct output.
+			</li>
+			<li>
+				Highlight <b>[undecidable]</b> if you cannot judge, for example because the audio is
+				unclear, you lack context, or you do not know. 
+			</li>
+			<li>
+				Higlight a clearly harmful error span in the system output.
+			</li>
+			<li>
+				If harm comes from a missing word or phrase, highlight the words immediately before and after the omission.
+			</li>
+		</ol>
+	</li>
+	<li>
+		<b>To remove highlight:</b> Hover over it and click Remove. 
+	</li>
+</ul>
