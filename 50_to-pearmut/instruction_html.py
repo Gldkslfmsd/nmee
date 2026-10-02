@@ -31,8 +31,6 @@ def instruction_html(rec, targets, tgt):
         if not by_system[system]:
             return ""
         out = "<br>".join(esc(t.get("explanation", "")) for t in by_system[system])
-        if rec.get("asr"):
-            out += f"<br>ASR: {esc(rec['asr'])}"
         return out
 
     def column_language(system):

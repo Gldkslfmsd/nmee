@@ -34,6 +34,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from pearmut_server_utils import generate_user_name
+
 from instruction_html import instruction_html, esc
 from nmee_protocol_v6_info import info as nmee_protocol_info
 
@@ -129,18 +131,22 @@ def build_item(rec, args, refs, assets_url, stats):
     if not rec.get("audio"):
         print(f"WARNING: {rec.get('document')}: no \"audio\", skipped", file=sys.stderr)
         return None
-    audio = Path(rec["audio"])
-    rel = Path(*audio.parts[-2:]) if len(audio.parts) > 1 else Path(audio.name)
-    clip = Path(args.clips_dir) / audio if args.clips_dir and not audio.is_absolute() else audio
+    a = Path(rec["audio"])
+    if not a.is_absolute():
+        relative = Path(args.audio_relative_to or ".")
+        clip = relative / Path(rec["audio"])
+    else:
+        clip = a
+    rel = Path(*clip.parts[-2:]) if len(clip.parts) > 1 else Path(clip.name)
     if not clip.exists():
         stats["missing clips"] += 1
     elif args.copy_assets:
-        dst = Path(args.copy_assets) / args.campaign_id / rel
+        dst = Path(args.copy_assets) / assets_url / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(clip, dst)
 
     src = (f'<audio controls src="{assets_url}/{rel.as_posix()}" '
-           f'type="{MIME.get(audio.suffix.lower(), "audio/wav")}"></audio>')
+           f'type="{MIME.get(clip.suffix.lower(), "audio/wav")}"></audio>')
     if rec.get("gold_transcript") and not args.no_gold:
         src += note_block("Gold transcript:", rec["gold_transcript"])
     for field, text in (find_reference(refs, rec).items() if refs else []):
@@ -152,7 +158,7 @@ def build_item(rec, args, refs, assets_url, stats):
 
     # only the fields Pearmut consumes; anything else would just bloat the logs
     item = {
-        "item_id": f"{rec.get('document')}#{audio.stem.split('.')[-1]}",
+        "item_id": f"{rec.get('document')}#{clip.stem.split('.')[-1]}",
         "src": src,
         "tgt": tgt,
         "instructions": instruction_html(rec, rec["targets"], tgt),
@@ -169,11 +175,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("annotations", help="JSONL of flagged harmful errors")
     ap.add_argument("-o", "--output", required=True)
-    ap.add_argument("--clips-dir", help="directory the \"audio\" paths are relative to (default: as given)")
+    ap.add_argument("--audio-relative-to", help="directory the \"audio\" paths are relative to (default: current directory if \"audio\" is relative, absolute otherwise)")
     ap.add_argument("--campaign-id", default="harm_review")
-    ap.add_argument("--assets-url", help="URL prefix for clips (default: ./assets/<campaign-id>)")
-    ap.add_argument("--copy-assets", metavar="ASSETS_DIR",
-                    help="copy the needed clips to ASSETS_DIR/<campaign-id>/")
+    ap.add_argument("--assets-url", metavar="ASSETS_URL", 
+                    help="URL prefix for clips (default: ./assets/<campaign-id>)")
+    ap.add_argument("--copy-assets", metavar="ASSETS_DIR", #default="./data",
+                    help="copy the needed clips to ASSETS_DIR/ASSETS_URL/")
 
     # what to keep
     ap.add_argument("--harmfulness", type=int, choices=range(0, 6), metavar="0-5",
@@ -198,21 +205,19 @@ def main():
                     help="pre-highlight the flagged spans (default: off)")
 
     # campaign
-    ap.add_argument("--template", default="../custom_nmee_demo.json",
-                    help="campaign JSON whose \"info\" block is copied verbatim "
-                         "(default: custom_nmee_demo.json next to this script)")
     ap.add_argument("--users", type=int, default=1, help="number of annotator tasks (default: 1)")
+    ap.add_argument("--usernames", type=str, nargs="+", default=[],
+                    help="names of the annotators (default: auto-generated)")
     ap.add_argument("--partition", action="store_true",
                     help="split the documents across --users instead of giving each user all of them")
     ap.add_argument("--shuffle", choices=["keep", "on", "off"], default="off",
-                    help="override the template's model shuffling; the columns are systems, so "
-                         "shuffling them only confuses the annotator (default: off)")
+                    help="model shuffling: the columns are systems, so "
+                         "shuffle them for fairer blind annotation. \"keep\" is what annotation protocol specifies. "
+                         "(default: off)")
     ap.add_argument("--show-model-names", choices=["keep", "on", "off"], default="on",
                     help="label each column with its system name (default: on)")
     args = ap.parse_args()
 
-    if not args.template:
-        sys.exit("no --template given and no custom_nmee_demo.json found next to this script")
     args.langs = set(args.lang.split(",")) if args.lang else None
     assets_url = (args.assets_url or f"./assets/{args.campaign_id}").rstrip("/")
     refs = (load_references(args.references_file, args.references)
@@ -245,6 +250,11 @@ def main():
         info["shuffle"] = args.shuffle == "on"
     if args.show_model_names != "keep":
         info["show_model_names"] = args.show_model_names == "on"
+    if args.usernames:
+        usernames = args.usernames
+        while len(usernames) < args.users:
+            usernames.append(generate_user_name(usernames))
+        info["users"] = usernames
     if args.prefill:
         info["instructions"] = (info.get("instructions", "")
             + '\n\n<p style="color: red;"><b>The spans are pre-filled because this is view-only '
@@ -254,10 +264,10 @@ def main():
               open(args.output, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
     if args.copy_assets:
-        print(f"clips copied to {Path(args.copy_assets).resolve() / args.campaign_id}", file=sys.stderr)
+        print(f"clips copied to {Path(args.copy_assets).resolve() / assets_url}", file=sys.stderr)
         print(f"clips referenced as {assets_url}/<document>/<clip>", file=sys.stderr)
     if stats["missing clips"]:
-        print(f"WARNING: {stats['missing clips']} clip(s) not found (--clips-dir {args.clips_dir})",
+        print(f"WARNING: {stats['missing clips']} clip(s) not found (--audio-relative-to {args.audio_relative_to})",
               file=sys.stderr)
     print(f"{len(documents)} documents, {stats['items']} items, {n_errors} flagged span(s), "
           f"{stats['spans']} pre-filled, {len(tasks)} task(s) "
