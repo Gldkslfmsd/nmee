@@ -13,7 +13,9 @@ One interface, several implementations chosen with --backend:
           for testing the pipeline
 
 A backend takes a list of chats (each a list of {"role", "content"} messages) and returns one string
-per chat. Add a new backend by subclassing Backend and registering it in BACKENDS.
+per chat: generate() returns them all at once, generate_iter() yields them in input order as soon as
+they are available. A response of None means the request failed (API backends only).
+Add a new backend by subclassing Backend and registering it in BACKENDS.
 """
 import json
 import os
@@ -57,7 +59,8 @@ def add_arguments(parser):
     g.add_argument("--max-new-tokens", type=int, default=BackendConfig.max_new_tokens)
     g.add_argument("--temperature", type=float, default=BackendConfig.temperature)
     g.add_argument("--batch-size", type=int, default=BackendConfig.batch_size,
-                   help="vllm: chats per generate() call; einfra: parallel requests")
+                   help="vllm: chats per generate() call (= granularity of the gradual output); "
+                        "einfra: parallel requests")
     g.add_argument("--no-guided-json", dest="guided_json", action="store_false",
                    help="do not constrain the output to the JSON schema")
     g.add_argument("--tensor-parallel-size", type=int, default=BackendConfig.tensor_parallel_size)
@@ -98,6 +101,14 @@ EINFRA_MODELS = {
 class Backend:
     def __init__(self, cfg):
         self.cfg = cfg
+
+    def generate_iter(self, chats, schema=None):
+        """Yield one response string per chat, in input order, as soon as they are available.
+        A response of None means the request failed.
+        Default: process in chunks of batch_size via generate()."""
+        step = max(1, self.cfg.batch_size)
+        for i in range(0, len(chats), step):
+            yield from self.generate(chats[i:i + step], schema)
 
     def generate(self, chats, schema=None):
         """chats: [[{"role", "content"}, ...], ...] -> one response string per chat."""
@@ -148,17 +159,19 @@ class VLLMBackend(Backend):
             kwargs.pop("guided_json", None)
             return SamplingParams(**kwargs)
 
-    def generate(self, chats, schema=None):
+    def generate_iter(self, chats, schema=None):
         params = self._sampling(schema)
-        out = []
         for i in range(0, len(chats), self.cfg.batch_size):
             batch = chats[i:i + self.cfg.batch_size]
             try:
                 results = self.llm.chat(batch, params, use_tqdm=False)
             except TypeError:  # older vLLM without use_tqdm
                 results = self.llm.chat(batch, params)
-            out += [r.outputs[0].text for r in results]
-        return out
+            for r in results:
+                yield r.outputs[0].text
+
+    def generate(self, chats, schema=None):
+        return list(self.generate_iter(chats, schema))
 
 
 class APIBackend(Backend):
@@ -190,6 +203,7 @@ class APIBackend(Backend):
               + (f", {self.extra}" if self.extra else ""), file=sys.stderr)
 
     def _one(self, chat, schema):
+        """The answer of the model, or None if the request failed after all retries."""
         import urllib.error
         import urllib.request
         body = {"model": self.model, "messages": chat, "temperature": self.cfg.temperature,
@@ -227,7 +241,7 @@ class APIBackend(Backend):
                 hint = f" -- missing or wrong API key (${self.cfg.api_key_env})"
         print(f"WARNING: request failed after {self.cfg.retries} attempts: {last}{hint}",
               file=sys.stderr)
-        return '{"annotations": []}'
+        return None
 
     def list_models(self):
         """GET {base}/models -- what the server offers."""
@@ -239,10 +253,20 @@ class APIBackend(Backend):
         data = payload.get("data", payload if isinstance(payload, list) else [])
         return [m.get("id", m) if isinstance(m, dict) else m for m in data]
 
-    def generate(self, chats, schema=None):
+    def generate_iter(self, chats, schema=None):
+        """All requests are submitted at once (batch_size in parallel); the answers are yielded in
+        input order as they complete. Closing the generator (Ctrl-C) cancels the queued requests."""
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=max(1, self.cfg.batch_size)) as pool:
-            return list(pool.map(lambda c: self._one(c, schema), chats))
+        pool = ThreadPoolExecutor(max_workers=max(1, self.cfg.batch_size))
+        try:
+            futures = [pool.submit(self._one, c, schema) for c in chats]
+            for f in futures:
+                yield f.result()
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    def generate(self, chats, schema=None):
+        return list(self.generate_iter(chats, schema))
 
 
 class DummyBackend(Backend):
