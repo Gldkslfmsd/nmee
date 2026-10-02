@@ -22,6 +22,10 @@ Reference translations come from a separate file: --references-file is the align
 hold references, e.g. --references reference_cs reference_de. Segments are matched by document and
 start time.
 
+Pages: by default a document is split into pages of about 90 seconds of audio; a page is closed
+as soon as the audio of its items (end - beg of each clip) adds up to --seconds-per-page seconds
+or more. With --seconds-per-page 0 a whole document is one page.
+
 Usage:
 python make_pearmut_campaign.py harmful.jsonl --clips-dir .. \\
     --copy-assets "${PEARMUT_ROOT:-.}/data/assets" -o campaign.json
@@ -169,6 +173,36 @@ def build_item(rec, args, refs, assets_url, stats):
     stats["spans"] += sum(len(v) for v in spans.values())
     return item
 
+
+# ---------------------------------------------------------------- pages
+
+def clip_seconds(rec):
+    """Audio length of the clip of one record (end - beg); 0 if the timestamps are missing."""
+    try:
+        return max(0.0, float(rec["end"]) - float(rec["beg"]))
+    except (KeyError, TypeError, ValueError):
+        return 0.0
+
+
+def build_pages(recs, args, refs, assets_url, stats):
+    """Items of one document (sorted by start time) grouped into pages.
+
+    With --seconds-per-page 0 the whole document is one page. Otherwise a page is closed once the
+    audio of its items adds up to --seconds-per-page seconds or more."""
+    pages, page, seconds = [], [], 0.0
+    for rec in recs:
+        item = build_item(rec, args, refs, assets_url, stats)
+        if not item:
+            continue
+        page.append(item)
+        seconds += clip_seconds(rec)
+        if args.seconds_per_page and seconds >= args.seconds_per_page:
+            pages.append(page)
+            page, seconds = [], 0.0
+    if page:
+        pages.append(page)
+    return pages
+
 # ---------------------------------------------------------------- CLI
 
 def main():
@@ -202,14 +236,19 @@ def main():
 
     # pre-filled spans
     ap.add_argument("--prefill", action="store_true",
-                    help="pre-highlight the flagged spans (default: off)")
+                    help="pre-highlight the flagged spans for debugging. Default: off")
 
     # campaign
     ap.add_argument("--users", type=int, default=1, help="number of annotator tasks (default: 1)")
     ap.add_argument("--usernames", type=str, nargs="+", default=[],
                     help="names of the annotators (default: auto-generated)")
     ap.add_argument("--partition", action="store_true",
-                    help="split the documents across --users instead of giving each user all of them")
+                    help="split the documents across --users instead of giving each user all of them "
+                         "(all pages of a document go to the same user)")
+    ap.add_argument("--seconds-per-page", type=int, default=90,
+                    help="number of audio seconds after which a page is wrapped, counted as the sum "
+                         "of the clip lengths (end - beg) of the items on the page "
+                         "(default: 90; 0 = the whole document per page)")
     ap.add_argument("--shuffle", choices=["keep", "on", "off"], default="off",
                     help="model shuffling: the columns are systems, so "
                          "shuffle them for fairer blind annotation. \"keep\" is what annotation protocol specifies. "
@@ -217,6 +256,9 @@ def main():
     ap.add_argument("--show-model-names", choices=["keep", "on", "off"], default="on",
                     help="label each column with its system name (default: on)")
     args = ap.parse_args()
+
+    if args.seconds_per_page < 0:
+        ap.error("--seconds-per-page must be >= 0 (0 = the whole document per page)")
 
     args.langs = set(args.lang.split(",")) if args.lang else None
     assets_url = (args.assets_url or f"./assets/{args.campaign_id}").rstrip("/")
@@ -233,17 +275,22 @@ def main():
             by_doc[rec.get("document")].append(rec)
             n_errors += len(rec["targets"])
 
-    stats, documents = defaultdict(int), []
+    stats = defaultdict(int)
+    doc_pages = []  # one entry per document: its list of pages (each page is a list of items)
     for doc in sorted(by_doc):
-        items = [it for it in (build_item(r, args, refs, assets_url, stats)
-                                for r in sorted(by_doc[doc], key=lambda r: r.get("beg") or 0)) if it]
-        if items:
-            documents.append(items)
+        pages = build_pages(sorted(by_doc[doc], key=lambda r: r.get("beg") or 0),
+                            args, refs, assets_url, stats)
+        if pages:
+            doc_pages.append(pages)
+
+    def flatten(docs):
+        return [page for pages in docs for page in pages]
 
     if args.partition:
-        tasks = [t for t in (documents[i::args.users] for i in range(args.users)) if t]
+        tasks = [t for t in (flatten(doc_pages[i::args.users]) for i in range(args.users)) if t]
     else:
-        tasks = [documents for _ in range(args.users)]
+        tasks = [flatten(doc_pages) for _ in range(args.users)]
+    n_pages = sum(len(p) for p in doc_pages)
 
     info = nmee_protocol_info
     if args.shuffle != "keep":
@@ -269,7 +316,7 @@ def main():
     if stats["missing clips"]:
         print(f"WARNING: {stats['missing clips']} clip(s) not found (--audio-relative-to {args.audio_relative_to})",
               file=sys.stderr)
-    print(f"{len(documents)} documents, {stats['items']} items, {n_errors} flagged span(s), "
+    print(f"{len(doc_pages)} documents, {n_pages} pages, {stats['items']} items, {n_errors} flagged span(s), "
           f"{stats['spans']} pre-filled, {len(tasks)} task(s) "
           f"{'partitioned' if args.partition else 'replicated'} -> {args.output}", file=sys.stderr)
 
