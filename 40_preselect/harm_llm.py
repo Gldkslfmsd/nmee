@@ -5,8 +5,8 @@ Input: the output of 30_add_and_align_sentences.py (one sentence per line, sever
 Output: one line per segment in which at least one harmful error was found, in the harmful-error format
 (see find_harmful_errors.py --help).
 
-The unit of work is a segment by default; document level is prepared for but not implemented yet
-(build_views() is the only place that would change).
+The unit of annotation is a segment. Several segments of one document can be sent to the LLM in a single
+request (build_groups()); the answers are still assigned to the individual segments.
 """
 import difflib
 import json
@@ -80,7 +80,7 @@ def role_of(system, asr, gold, references):
 # ---------------------------------------------------------------- views (units of work)
 
 def build_views(recs, args):
-    """[(records, view)] -- one per segment for now."""
+    """[(ctx, view)] -- one per segment."""
     views = []
     for i, rec in enumerate(recs):
         asr, gold, references, shown, annotate = resolve_systems(rec, args)
@@ -105,6 +105,36 @@ def build_views(recs, args):
         views.append(({"record": rec, "asr": asr, "gold": gold, "references": references,
                        "annotate": annotate}, view))
     return views
+
+
+def view_chars(view):
+    """Size of a segment in the prompt (characters of the shown texts)."""
+    return sum(len(item["text"]) for item in view["shown"])
+
+
+def build_groups(work, args):
+    """Split the list of (ctx, view) into groups that are sent to the LLM as one request.
+
+    A group holds consecutive items of the same document, at most args.group_size of them
+    (0 = no limit) and at most args.group_chars characters of text (0 = no limit; a single segment
+    bigger than that forms a group of its own)."""
+    size, limit = args.group_size, args.group_chars
+    groups, cur, cur_chars = [], [], 0
+    for item in work:
+        ctx, view = item
+        n = view_chars(view)
+        if cur:
+            same_doc = cur[-1][0]["record"].get("document") == ctx["record"].get("document")
+            full = size > 0 and len(cur) >= size
+            too_big = limit > 0 and cur_chars + n > limit
+            if not same_doc or full or too_big:
+                groups.append(cur)
+                cur, cur_chars = [], 0
+        cur.append(item)
+        cur_chars += n
+    if cur:
+        groups.append(cur)
+    return groups
 
 
 # ---------------------------------------------------------------- parsing the answers

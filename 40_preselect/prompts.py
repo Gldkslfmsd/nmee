@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Prompts and the response schema for the harmful-error annotation.
 
-build_chat(view, cfg) turns one unit of work (a segment, or later a document) into a chat. A "view" is
-what the LLM is shown:
+build_chat(view, cfg) turns one unit of work (a segment) into a chat. A "view" is what the LLM is shown:
 
     {"domain": "This is an earnings call ...",          # optional static description
      "context_before": [...], "context_after": [...],   # optional neighbouring sentences (not annotated)
      "shown":    [{"system", "lan", "text", "role"}],   # role: source | reference | target
      "annotate": ["canary_asr", "canary_cs", ...]}      # systems the model must look for errors in
+
+build_group_chat(views) puts several views (segments of one document) into a single request; the
+model then labels every annotation with the number of the segment it belongs to.
 
 Everything the model needs is in the user message; the system message only fixes the role and the JSON
 output. A different prompting strategy (few-shot, chain of thought, DSPy) can live in its own module
@@ -55,6 +57,20 @@ Answer with a JSON object of this shape, and nothing else:
 {"annotations": [{"system": "...", "span": "...", "intended": "...", "harm_types": ["..."], "harmfulness": 3, "explanation": "...", "error_source": "MT"}]}
 Answer {"annotations": []} if there is no harmful error."""
 
+# the same task for a request with several numbered segments
+GROUP_TASK = (
+    TASK
+    .replace("Find COMPREHENSION",
+             "The input below contains several numbered segments, in order, taken from one speech "
+             "(some segments of it may be left out). Judge every segment on its own: the outputs of one "
+             "segment are never evidence for another, but the neighbouring segments help you understand "
+             "the context.\n\nFind COMPREHENSION", 1)
+    .replace("For each error report:\n",
+             "For each error report:\n- \"segment\": the number of the segment the error is in;\n", 1)
+    .replace('{"annotations": [{"system"', '{"annotations": [{"segment": 1, "system"', 1)
+    .replace("if there is no harmful error.", "if there is no harmful error in any segment.", 1)
+)
+
 ROLE_NOTE = {
     "source": "automatic transcript of the speech",
     "gold": "human transcript, correct",
@@ -63,29 +79,29 @@ ROLE_NOTE = {
 }
 
 
-def response_schema(systems):
-    """JSON schema for constrained decoding / response_format."""
+def response_schema(systems, grouped=False):
+    """JSON schema for constrained decoding / response_format.
+    grouped: every annotation also carries the number of its segment."""
+    item = {
+        "system": {"type": "string", "enum": list(systems)},
+        "span": {"type": "string"},
+        "intended": {"type": "string"},
+        "harm_types": {"type": "array", "items": {"type": "string", "enum": HARM_TYPES}},
+        "harmfulness": {"type": "integer", "minimum": 1, "maximum": 5},
+        "explanation": {"type": "string"},
+        "error_source": {"type": "string", "enum": ERROR_SOURCES},
+    }
+    required = ["system", "span", "intended", "harm_types", "harmfulness", "explanation"]
+    if grouped:
+        item = {"segment": {"type": "integer", "minimum": 1}, **item}
+        required = ["segment"] + required
     return {
         "type": "object",
         "properties": {
             "annotations": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "system": {"type": "string", "enum": list(systems)},
-                        "span": {"type": "string"},
-                        "intended": {"type": "string"},
-                        "harm_types": {"type": "array",
-                                       "items": {"type": "string", "enum": HARM_TYPES}},
-                        "harmfulness": {"type": "integer", "minimum": 1, "maximum": 5},
-                        "explanation": {"type": "string"},
-                        "error_source": {"type": "string", "enum": ERROR_SOURCES},
-                    },
-                    "required": ["system", "span", "intended", "harm_types", "harmfulness",
-                                 "explanation"],
-                    "additionalProperties": False,
-                },
+                "items": {"type": "object", "properties": item, "required": required,
+                          "additionalProperties": False},
             },
         },
         "required": ["annotations"],
@@ -93,14 +109,20 @@ def response_schema(systems):
     }
 
 
-def _lines(view):
+def _header(view):
+    """Situation and neighbouring context."""
     out = []
     if view.get("domain"):
         out.append(f"Situation: {view['domain']}")
     for key, label in (("context_before", "Preceding context"), ("context_after", "Following context")):
         if view.get(key):
             out.append(f"{label} (not annotated): " + " ".join(view[key]))
-    out.append("")
+    return out
+
+
+def _body(view):
+    """The outputs of one segment and the list of systems to annotate."""
+    out = []
     for item in view["shown"]:
         mark = " to annotate" if item["system"] in view["annotate"] else ""
         note = ROLE_NOTE.get(item["role"], item["role"])
@@ -110,7 +132,27 @@ def _lines(view):
     return out
 
 
+def _lines(view):
+    return _header(view) + [""] + _body(view)
+
+
 def build_chat(view, cfg=None):
-    """[{"role": "system"...}, {"role": "user"...}] for one segment (or document)."""
+    """[{"role": "system"...}, {"role": "user"...}] for one segment."""
     return [{"role": "system", "content": SYSTEM_MESSAGE},
             {"role": "user", "content": TASK + "\n\n" + "\n".join(_lines(view))}]
+
+
+def build_group_chat(views, cfg=None):
+    """One chat for several segments of the same document, numbered from 1.
+    The situation is stated once; the context before the first and after the last segment is shown."""
+    first, last = views[0], views[-1]
+    header = _header({"domain": first.get("domain"),
+                      "context_before": first.get("context_before"),
+                      "context_after": last.get("context_after")})
+    lines = header + [""]
+    for k, view in enumerate(views, 1):
+        lines.append(f"=== Segment {k} ===")
+        lines += _body(view)
+        lines.append("")
+    return [{"role": "system", "content": SYSTEM_MESSAGE},
+            {"role": "user", "content": GROUP_TASK + "\n\n" + "\n".join(lines).rstrip()}]
