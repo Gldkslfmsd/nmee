@@ -120,15 +120,16 @@ def _header(view):
     return out
 
 
-def _body(view):
-    """The outputs of one segment and the list of systems to annotate."""
+def _body(view, with_systems=True):
+    """The outputs of one segment and (optionally) the list of systems to annotate."""
     out = []
     for item in view["shown"]:
         mark = " to annotate" if item["system"] in view["annotate"] else ""
         note = ROLE_NOTE.get(item["role"], item["role"])
         out.append(f"[{item['system']}] ({item['lan']}, {note}){mark}: {item['text']}")
-    out.append("")
-    out.append("Systems to annotate: " + ", ".join(view["annotate"]))
+    if with_systems:
+        out.append("")
+        out.append("Systems to annotate: " + ", ".join(view["annotate"]))
     return out
 
 
@@ -144,15 +145,19 @@ def build_chat(view, cfg=None):
 
 def build_group_chat(views, cfg=None):
     """One chat for several segments of the same document, numbered from 1.
-    The situation is stated once; the context before the first and after the last segment is shown."""
+    The situation is stated once; the context before the first and after the last segment is shown.
+    If every segment has the same systems to annotate, the list is given once in the header."""
     first, last = views[0], views[-1]
     header = _header({"domain": first.get("domain"),
                       "context_before": first.get("context_before"),
                       "context_after": last.get("context_after")})
+    common = all(v["annotate"] == first["annotate"] for v in views)
+    if common:
+        header.append("Systems to annotate in every segment: " + ", ".join(first["annotate"]))
     lines = header + [""]
     for k, view in enumerate(views, 1):
         lines.append(f"=== Segment {k} ===")
-        lines += _body(view)
+        lines += _body(view, with_systems=not common)
         lines.append("")
     return [{"role": "system", "content": SYSTEM_MESSAGE},
             {"role": "user", "content": GROUP_TASK + "\n\n" + "\n".join(lines).rstrip()}]
