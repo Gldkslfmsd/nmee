@@ -29,7 +29,7 @@ from dataclasses import dataclass, fields
 class BackendConfig:
     backend: str = "vllm"
     model: str = "Qwen/Qwen3-4B-Instruct-2507"
-    max_new_tokens: int = 1024
+    max_new_tokens: int = 4000
     temperature: float = 0.0
     batch_size: int = 64            # einfra: parallel requests; vllm: chats per llm.chat() call
     guided_json: bool = True        # constrain the output to the JSON schema where supported

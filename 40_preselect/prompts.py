@@ -32,6 +32,8 @@ SYSTEM_MESSAGE = ("You are an expert evaluator of speech translation and speech 
 
 TASK = """Imagine a live event whose speech is transcribed and translated automatically, and the output is shown on a large screen to the audience.
 
+You are preselecting errors for human annotation. False positives are costly: two independent annotators must later agree on every error you flag, and they will waste time on unclear cases. Only flag errors that are UNAMBIGUOUS and CLEARLY HARMFUL.
+
 Find COMPREHENSION ERRORS THAT ARE ALSO HARMFUL in the outputs marked "to annotate". A comprehension error changes or obscures the meaning, or misleads the reader. It is harmful if it would cause a problem beyond the misunderstanding itself: someone would have to correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it.
 
 Harm types:
@@ -42,20 +44,26 @@ Harm types:
 - "Safety, health or legal risk": the error has an immediate real-world consequence here, beyond the general risk of being misinformed.
 - "Other": harmful in some other way.
 
-Do NOT annotate: harmless paraphrases, style, word order, punctuation, capitalisation, or spelling that does not change the meaning; nor content that is missing from one output but harmless in itself.
+Do NOT annotate:
+- Borderline cases, minor errors, or anything two independent annotators might reasonably disagree on.
+- Harmless paraphrases, style, word order, punctuation, capitalisation, or spelling that does not change the meaning.
+- Content that is missing from one output but harmless in itself.
+- Errors of degree or subjective interpretation.
+
+When you are uncertain, do not flag the error. Precision is more important than recall.
 
 For each error report:
 - "system": the name of the output the error is in (one of the systems to annotate);
 - "span": the exact, contiguous text of that output containing the error (copy it verbatim, as short as possible);
 - "intended": what the span should have said;
 - "harm_types": one or more of the harm types above;
-- "harmfulness": an integer 1-5, how likely the error causes harm beyond the misunderstanding (1 = very unlikely, 5 = very likely);
+- "harmfulness": an integer 1-5, how likely the error causes harm beyond the misunderstanding (1 = very unlikely, 5 = very likely); only flag errors with harmfulness 3 or above;
 - "explanation": one or two sentences on what went wrong and why it is harmful;
 - "error_source": "ASR" if the error is already in the transcript, "MT" if the transcript is correct but the translation is not, "ASR+MT" if both, "unknown" if you cannot tell.
 
 Answer with a JSON object of this shape, and nothing else:
 {"annotations": [{"system": "...", "span": "...", "intended": "...", "harm_types": ["..."], "harmfulness": 3, "explanation": "...", "error_source": "MT"}]}
-Answer {"annotations": []} if there is no harmful error."""
+Answer {"annotations": []} if there is no unambiguous harmful error."""
 
 # the same task for a request with several numbered segments
 GROUP_TASK = (
@@ -68,7 +76,7 @@ GROUP_TASK = (
     .replace("For each error report:\n",
              "For each error report:\n- \"segment\": the number of the segment the error is in;\n", 1)
     .replace('{"annotations": [{"system"', '{"annotations": [{"segment": 1, "system"', 1)
-    .replace("if there is no harmful error.", "if there is no harmful error in any segment.", 1)
+    .replace("if there is no unambiguous harmful error.", "if there is no unambiguous harmful error in any segment.", 1)
 )
 
 ROLE_NOTE = {
