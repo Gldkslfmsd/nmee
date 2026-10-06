@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Agreement between runs of 40_find_harmful_errors.py on detecting harmful errors.
 
-    python3 45_analyze_agreement.py out/Gemma4_cs.jsonl out/Kimi_de.jsonl [more runs ...] \\
-        [--heatmap kappa.png]
+    python3 45_analyze_agreement.py --input first100.jsonl out/Gemma4_cs.jsonl out/Kimi_de.jsonl \\
+        [more runs ...] [--heatmap kappa.png]
 
-The output of 40_find_harmful_errors.py contains only segments with at least one flagged error. The
-segments that were annotated but have no error are listed in OUTPUT.done next to it, which is read here;
-without it, "no error found" cannot be told from "not annotated", and the agreement is computed only on
-the segments flagged by at least one run (with a warning).
+The output of 40_find_harmful_errors.py contains only segments with at least one flagged error.
+With --input (the aligned JSONL that was annotated, one segment per line), every segment of it is
+assumed to have been annotated by every run: a segment a run did not flag is a negative for every system
+that run annotated. Without --input, the segments listed in OUTPUT.done next to each run are used (the
+ones annotated by all runs); without those either, only the segments flagged by at least one run are
+known, and the negatives are not meaningful (with a warning).
 
 Every (run, system) combination is an entry, e.g. Gemma4_cs:canary_asr, Gemma4_cs:canary_cs,
-Kimi_de:canary_asr, Kimi_de:canary_de. For every pair of entries, on the segments annotated by all runs:
-the 2x2 confusion matrix of "the segment has a flagged error", Cohen's kappa, positive agreement, and
+Kimi_de:canary_asr, Kimi_de:canary_de. For every pair of entries: the 2x2 confusion matrix of "the
+segment has a flagged error" (yes = flagged, no = not flagged), Cohen's kappa, positive agreement, and
 how often one confirms the other. The kappas are summarised in a matrix (and optionally a heatmap).
 """
 import argparse
@@ -22,6 +24,8 @@ from collections import Counter, defaultdict
 from itertools import combinations
 from pathlib import Path
 
+SYSTEM_KEYWORDS = {"all", "targets", "human"}  # --annotate keywords of 40_find_harmful_errors.py
+
 
 # ---------------------------------------------------------------- loading
 
@@ -30,7 +34,23 @@ def segment_key(rec):
     return f"{rec.get('document')}\t{rec.get('beg')}\t{rec.get('end')}"
 
 
-def load_run(path):
+def load_input(path):
+    """(segment keys in input order, without duplicates; all system names in the input)."""
+    keys, systems = [], set()
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                rec = json.loads(line)
+                keys.append(segment_key(rec))
+                systems.update(rec.get("systems_info", {}))
+    unique = list(dict.fromkeys(keys))
+    if len(unique) < len(keys):
+        print(f"note: {len(keys) - len(unique)} duplicate segments in {path} are counted once",
+              file=sys.stderr)
+    return unique, systems
+
+
+def load_run(path, known_systems=None):
     recs = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -53,6 +73,12 @@ def load_run(path):
         for t in rec.get("targets", []):
             systems.add(t["system"])
             flags[(key, t["system"])].append(t)
+    # systems that were annotated but never flagged are known only from the run's settings
+    for s in config.get("annotate") or []:
+        if s in SYSTEM_KEYWORDS:
+            continue
+        if known_systems is None or s in known_systems:
+            systems.add(s)
     return {"name": Path(path).stem, "path": path, "recs": recs, "done": done,
             "config": config, "systems": systems, "flags": flags}
 
@@ -119,7 +145,7 @@ def report_pairs(entries, keys):
         print("\n" + "=" * 100)
         print(f"A = {a['label']}   vs   B = {b['label']}   ({n} segments)")
         print("=" * 100)
-        print("  1) detection (segment has a flagged error)")
+        print("  1) detection (yes = flagged, no = not flagged)")
         print("     rows: A, columns: B")
         print(" " * 13 + f"{'yes':>8}{'no':>8}")
         print(" " * 5 + f"{'yes':>8}{both:8}{only_a:8}")
@@ -133,7 +159,7 @@ def report_kappa_matrix(entries, kappas):
     labels = [e["label"] for e in entries]
     width = max(len(l) for l in labels)
     print("\n" + "=" * 100)
-    print("KAPPA MATRIX: detection (segment has a flagged error)")
+    print("KAPPA MATRIX: detection (yes = flagged, no = not flagged)")
     print("=" * 100)
     print(" " * (width + 5) + "".join(f"{j + 1:>7}" for j in range(len(entries))))
     for i, label in enumerate(labels):
@@ -185,35 +211,54 @@ def plot_heatmap(entries, kappas, path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("files", nargs="+",
-                    help="outputs of 40_find_harmful_errors.py (OUTPUT.done next to each is used)")
+    ap.add_argument("files", nargs="+", help="outputs of 40_find_harmful_errors.py")
+    ap.add_argument("--input",
+                    help="the aligned JSONL that was annotated (input of 40_find_harmful_errors.py); "
+                         "all its segments are assumed annotated by every run, not flagged = negative")
     ap.add_argument("--heatmap", help="write the kappa matrix as a heatmap image (e.g. kappa.png; "
                                       "needs matplotlib)")
     args = ap.parse_args()
 
-    runs = [load_run(p) for p in args.files]
+    input_keys, input_systems = (load_input(args.input) if args.input else (None, None))
+    runs = [load_run(p, input_systems) for p in args.files]
     names = [r["name"] for r in runs]
     if len(set(names)) < len(names):  # same file name in different directories
         for r in runs:
             r["name"] = r["path"]
 
-    if all(r["done"] is not None for r in runs):
-        keys = set.intersection(*(r["done"] for r in runs))
-        dropped = set.union(*(r["done"] for r in runs)) - keys
+    if input_keys is not None:
+        keys = input_keys
+        keyset = set(keys)
+        for r in runs:
+            outside = set(r["recs"]) - keyset
+            if outside:
+                print(f"WARNING: {len(outside)} flagged segments of {r['name']} are not in "
+                      f"{args.input} (different input or segmentation?); ignored", file=sys.stderr)
+            unknown = r["systems"] - input_systems
+            if unknown:
+                print(f"WARNING: systems of {r['name']} not in {args.input}: "
+                      f"{', '.join(sorted(unknown))}", file=sys.stderr)
+        print(f"{len(runs)} runs, {len(keys)} segments in {args.input} "
+              f"(all assumed annotated by every run; not flagged = negative)")
+    elif all(r["done"] is not None for r in runs):
+        keyset = set.intersection(*(r["done"] for r in runs))
+        dropped = set.union(*(r["done"] for r in runs)) - keyset
         if dropped:
             print(f"note: {len(dropped)} segments not annotated by all runs are ignored",
                   file=sys.stderr)
+        keys = sorted(keyset)
+        print(f"{len(runs)} runs, {len(keys)} segments annotated by all of them")
     else:
         missing = [r["name"] for r in runs if r["done"] is None]
-        print(f"WARNING: no .done file for {', '.join(missing)}: segments without any flag are "
-              f"unknown, using only the segments flagged by at least one run -- the 'no/no' cell "
-              f"and the kappas are not meaningful", file=sys.stderr)
-        keys = set.union(*(set(r["recs"]) for r in runs))
+        print(f"WARNING: no --input and no .done file for {', '.join(missing)}: segments without "
+              f"any flag are unknown, using only the segments flagged by at least one run -- the "
+              f"'no/no' cell and the kappas are not meaningful", file=sys.stderr)
+        keyset = set.union(*(set(r["recs"]) for r in runs))
+        keys = sorted(keyset)
+        print(f"{len(runs)} runs, {len(keys)} segments flagged by at least one of them")
     if not keys:
-        sys.exit("no common segments")
-    keys = sorted(keys)
+        sys.exit("no segments")
     keyset = set(keys)
-    print(f"{len(runs)} runs, {len(keys)} segments annotated by all of them")
 
     report_models(runs, keys)
 
