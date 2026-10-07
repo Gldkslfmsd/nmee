@@ -1,0 +1,32 @@
+========================================================================
+EVALUATION: GLM.jsonl  (18 segments)
+========================================================================
+
+canary_asr (ASR)  (18 targets)
+                  gold yes   gold no
+         flagged         2         3
+     not flagged         0        13
+  accuracy 0.833 | precision 0.400 | recall 1.000 | F1 0.571
+
+canary_cs  (17 targets)
+                  gold yes   gold no
+         flagged        12         5
+     not flagged         0         0
+  accuracy 0.706 | precision 0.706 | recall 1.000 | F1 0.828
+
+overall  (35 targets)
+                  gold yes   gold no
+         flagged        14         8
+     not flagged         0        13
+  accuracy 0.771 | precision 0.636 | recall 1.000 | F1 0.778
+
+summary                      n    TP    FP    FN    TN     acc    prec     rec      F1
+canary_asr (ASR)            18     2     3     0    13   0.833   0.400   1.000   0.571
+canary_cs                   17    12     5     0     0   0.706   0.706   1.000   0.828
+overall                     35    14     8     0    13   0.771   0.636   1.000   0.778
+
+audio duration
+  all segments                         18 segments,   3 documents, total 0:01:52 | per segment: mean 6.2s, median 4.4s, min 1.1s, max 20.0s
+  segments with a confirmed error      13 segments,   3 documents, total 0:01:19 | per segment: mean 6.1s, median 4.3s, min 2.1s, max 20.0s
+  note: only LLM-preselected segments were annotated; recall is within those segments
+
