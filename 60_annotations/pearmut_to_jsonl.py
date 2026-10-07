@@ -11,16 +11,22 @@
   character offsets with an inclusive end. A span at or past the end of the text (pearmut's marker after
   the last character) is not an error; it is used to confirm that an output has no harmful error.
 
-Output: the input records of the segments annotated in pearmut, unchanged, plus
+Output: the input records of the segments annotated in pearmut, plus
   "gold_annotations": [true, false, null, ...]   -- one per item of "targets":
     true   the annotator marked an error span overlapping the flagged span (in the same system)
     false  the annotator saw this system in this segment and marked no overlapping span
     null   the annotator did not see this system in this segment (or the span could not be located)
+A system shown in pearmut that has no target in the record (e.g. the ASR, when the LLM flagged only
+the translation) is added to "targets" as a target without a span:
+    {"tgt_lan": ..., "system": ..., "text": ..., "span": null, "span_start": null, "span_end": null}
+  and its gold annotation is true if the annotator marked any error span in that system, false if none.
 
 Several --input files are merged; a segment and target system present in more than one file is reported
 and kept from the first file only. Several --pearmut files are merged too. With {user} in -o there is one
 output file per annotator; otherwise the labels of all annotators are combined: true only if every
 annotator who saw the target marked it. Disagreements between annotators are reported either way.
+--eval also prints the evaluation of eval.py (confusion matrix, accuracy, precision, recall) for every
+output file.
 Segments are matched by the audio file name; the spans by character offsets if the texts are identical,
 else by finding the flagged span in the text shown in pearmut.
 """
@@ -31,6 +37,8 @@ import os
 import re
 import sys
 from collections import Counter, defaultdict
+
+import eval as evaluation  # eval.py next to this script
 
 
 def shout(msg):
@@ -74,10 +82,14 @@ def load_pearmut(paths, stats):
                             if si >= len(text):  # end marker: "no error"
                                 continue
                             spans[system].append((si, min(len(text), ei + 1)))
+                    # languages from the header of the suggestion table: "canary_cs (CS)"
+                    lans = {sys_: lan.lower() for sys_, lan in re.findall(
+                        r"<th[^>]*>\s*([^<>()]+?)\s*\(([\w-]+)\)\s*</th>", item.get("instructions") or "")}
                     name = audio_name(m.group(1))
                     if user in gold[name]:
                         stats["pearmut items annotated again by the same user (last kept)"] += 1
-                    gold[name][user] = {"item_id": item.get("item_id"), "texts": texts, "spans": spans}
+                    gold[name][user] = {"item_id": item.get("item_id"), "texts": texts, "spans": spans,
+                                        "lans": lans}
                     stats["pearmut items"] += 1
     return gold
 
@@ -115,6 +127,8 @@ def judge(target, human, stats):
     system = target.get("system")
     if system not in human["texts"]:
         return None
+    if target.get("span") is None:  # target without a span: any error in this system
+        return bool(human["spans"].get(system))
     htext = human["texts"][system] or ""
     if htext == target.get("text"):
         s, e = target.get("span_start"), target.get("span_end")
@@ -131,6 +145,23 @@ def judge(target, human, stats):
     return any(hs < e and s < he for hs, he in human["spans"].get(system, []))
 
 
+def add_unflagged_systems(rec, by_user, stats):
+    """Append a target without a span for every system shown in pearmut that has no target."""
+    present = {t.get("system") for t in rec["targets"]}
+    for h in by_user.values():
+        for system, text in h["texts"].items():
+            if system in present:
+                continue
+            present.add(system)
+            if system == rec.get("asr_system"):
+                lan, text = rec.get("src_language"), rec.get("asr") or text
+            else:
+                lan = h["lans"].get(system)
+            rec["targets"].append({"tgt_lan": lan, "system": system, "text": text,
+                                   "span": None, "span_start": None, "span_end": None})
+            stats["targets without a span added"] += 1
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -141,6 +172,8 @@ def main():
                     help="the annotated LLM preselection: output(s) of 40_find_harmful_errors.py")
     ap.add_argument("-o", "--output", required=True,
                     help="output JSONL; {user} in the name writes one file per annotator")
+    ap.add_argument("--eval", action="store_true",
+                    help="also print the evaluation (eval.py) of every output file")
     args = ap.parse_args()
 
     stats = Counter()
@@ -156,6 +189,7 @@ def main():
             stats["input segments not annotated in pearmut"] += 1
             continue
         matched.add(name)
+        add_unflagged_systems(rec, gold[name], stats)
         labels[i] = [{u: judge(t, h, stats) for u, h in gold[name].items()} for t in rec["targets"]]
         for t, per_user in zip(rec["targets"], labels[i]):
             vals = {u: v for u, v in per_user.items() if v is not None}
@@ -171,19 +205,20 @@ def main():
     for i in labels:
         rec = records[i]
         for t in rec["targets"]:
-            flagged[(audio_name(rec.get("audio")), t.get("system"))].append(
-                (t.get("span_start"), t.get("span_end")))
+            if t.get("span") is not None:
+                flagged[(audio_name(rec.get("audio")), t.get("system"))].append(
+                    (t.get("span_start"), t.get("span_end")))
     for name in matched:
         for h in gold[name].values():
             for system, spans in h["spans"].items():
                 for hs, he in spans:
                     if not any(s is not None and e is not None and hs < e and s < he
                                for s, e in flagged.get((name, system), [])):
-                        stats["human spans not overlapping any flagged target"] += 1
+                        stats["human spans not overlapping any flagged span"] += 1
 
     def write(path, value_of):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        counts, n = Counter(), 0
+        counts, n, written = Counter(), 0, []
         with open(path, "w", encoding="utf-8") as out:
             for i, rec in enumerate(records):
                 if i not in labels:
@@ -194,10 +229,14 @@ def main():
                 out_rec = copy.deepcopy(rec)
                 out_rec["gold_annotations"] = values
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
+                written.append(out_rec)
                 n += 1
                 counts.update("null" if v is None else str(v).lower() for v in values)
         shout(f"-> {path}: {n} segments, targets: "
               + ", ".join(f"{k} {counts[k]}" for k in ("true", "false", "null")))
+        if args.eval:
+            evaluation.report(written, title=path)
+            print()
 
     if "{user}" in args.output:
         for u in users:
