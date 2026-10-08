@@ -8,27 +8,36 @@
 
 --input: output of 40_find_harmful_errors.py (one line per segment, one or more flagged "targets").
 --pearmut: pearmut annotation JSONL (one line per page: "item", "annotation", "user_id"); error spans are
-  character offsets with an inclusive end. A span at or past the end of the text (pearmut's marker after
-  the last character) is not an error; it is used to confirm that an output has no harmful error.
+  character offsets with an inclusive end. Two special tokens follow the text of every system output:
+  [no harm] at offset len(text) and [undecidable] at offset len(text) + 1. A span starting at one of these
+  offsets is not an error: it is the annotator's verdict on the whole output of that system.
 
 Output: the input records of the segments annotated in pearmut, plus
-  "gold_annotations": [true, false, null, ...]   -- one per item of "targets":
-    true   the annotator marked an error span overlapping the flagged span (in the same system)
-    false  the annotator saw this system in this segment and marked no overlapping span
-    null   the annotator did not see this system in this segment (or the span could not be located)
+  "gold_annotations": [true, false, null, ...]   -- one per item of "targets"; the verdict is about the
+  whole output of the target's system in this segment, wherever the error is (not only at the flagged span):
+    true   the annotator marked at least one error span in this system's output
+    false  no error span, and the annotator selected [no harm] or [undecidable] for it
+    null   the annotator did not see this system in this segment, or marked nothing at all for it
+  "gold_annotation_details": ["harmful", "no_harm", "undecidable", null, ...]   -- one per item of "targets":
+    harmful       the annotator marked an error span in this system's output (gold_annotations true)
+    undecidable   the annotator selected [undecidable] for this system's output (gold_annotations false)
+    no_harm       the annotator selected [no harm] for this system's output (gold_annotations false)
+    null          as in gold_annotations
+  gold_annotations is not changed by this: it is false for both "no_harm" and "undecidable".
 A system shown in pearmut that has no target in the record (e.g. the ASR, when the LLM flagged only
 the translation) is added to "targets" as a target without a span:
     {"tgt_lan": ..., "system": ..., "text": ..., "span": null, "span_start": null, "span_end": null}
-  and its gold annotation is true if the annotator marked any error span in that system, false if none.
+  and its gold annotation is decided in the same way.
 
 Several --input files are merged; a segment and target system present in more than one file is reported
 and kept from the first file only. Several --pearmut files are merged too. With {user} in -o there is one
 output file per annotator; otherwise the labels of all annotators are combined: true only if every
-annotator who saw the target marked it. Disagreements between annotators are reported either way.
---eval also prints the evaluation of eval.py (confusion matrix, accuracy, precision, recall) for every
-output file.
-Segments are matched by the audio file name; the spans by character offsets if the texts are identical,
-else by finding the flagged span in the text shown in pearmut.
+annotator who saw the target marked it. In the details, "harmful" needs all annotators who saw the target,
+"undecidable" is given if any of them chose it (and not all said harmful), else "no_harm".
+Disagreements between annotators are reported either way.
+The evaluation (confusion matrix, accuracy, precision, recall) is done separately by eval.py.
+Segments are matched by the audio file name. The position of the flagged span does not decide the gold
+annotation; the statistics only report the human error spans that overlap no flagged span.
 """
 import argparse
 import copy
@@ -38,7 +47,8 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-import eval as evaluation  # eval.py next to this script
+
+MARKERS = ("no_harm", "undecidable")  # the special tokens after each output, in this order
 
 
 def shout(msg):
@@ -52,7 +62,8 @@ def audio_name(path):
 # ---------------------------------------------------------------- pearmut
 
 def load_pearmut(paths, stats):
-    """{audio file name: {user: {"item_id", "texts": {system: text}, "spans": {system: [(s, e)]}}}}"""
+    """{audio file name: {user: {"item_id", "texts": {system: text}, "spans": {system: [(s, e)]},
+    "markers": {system: {"no_harm" and/or "undecidable"}}}}}"""
     gold = defaultdict(dict)
     for path in paths:
         with open(path, encoding="utf-8") as f:
@@ -70,16 +81,22 @@ def load_pearmut(paths, stats):
                         stats["pearmut items without audio (skipped)"] += 1
                         continue
                     texts = item.get("tgt") or {}
-                    spans = {}
+                    spans, markers = {}, {}
                     for system, text in texts.items():
                         text = text or ""
                         spans[system] = []
+                        markers[system] = set()
                         for sp in ((ann or {}).get(system) or {}).get("error_spans") or []:
                             si, ei = sp.get("start_i"), sp.get("end_i")
                             if si is None or ei is None:
                                 continue
                             si, ei = min(si, ei), max(si, ei)
-                            if si >= len(text):  # end marker: "no error"
+                            if si >= len(text):  # special token after the text: [no harm], [undecidable]
+                                if si - len(text) >= len(MARKERS):
+                                    stats["marker offsets beyond the two special tokens (ignored)"] += 1
+                                for k, name in enumerate(MARKERS):
+                                    if si <= len(text) + k <= ei:
+                                        markers[system].add(name)
                                 continue
                             spans[system].append((si, min(len(text), ei + 1)))
                     # languages from the header of the suggestion table: "canary_cs (CS)"
@@ -89,7 +106,7 @@ def load_pearmut(paths, stats):
                     if user in gold[name]:
                         stats["pearmut items annotated again by the same user (last kept)"] += 1
                     gold[name][user] = {"item_id": item.get("item_id"), "texts": texts, "spans": spans,
-                                        "lans": lans}
+                                        "markers": markers, "lans": lans}
                     stats["pearmut items"] += 1
     return gold
 
@@ -123,26 +140,34 @@ def load_inputs(paths, stats):
 
 
 def judge(target, human, stats):
-    """True / False / None for one flagged target and one annotator's annotation of the segment."""
+    """True / False / None for one target (one system output in the segment) and one annotator.
+
+    The verdict is about the whole output of the system, wherever the error is:
+      True   the annotator marked at least one error span in this system's output
+      False  no error span, and [no harm] or [undecidable] was selected
+      None   the system was not shown to this annotator, or nothing at all was marked for it
+    """
     system = target.get("system")
     if system not in human["texts"]:
         return None
-    if target.get("span") is None:  # target without a span: any error in this system
-        return bool(human["spans"].get(system))
-    htext = human["texts"][system] or ""
-    if htext == target.get("text"):
-        s, e = target.get("span_start"), target.get("span_end")
-    else:
-        i = htext.find(target.get("span") or "\0")
-        if i < 0:
-            stats["flagged span not found in the pearmut text (null)"] += 1
-            return None
-        s, e = i, i + len(target["span"])
-    if s is None or e is None:
+    has_markers = bool(human["markers"].get(system))
+    if human["spans"].get(system):
+        if has_markers:
+            stats["systems with an error span and a [no harm]/[undecidable] token (counted as harmful)"] += 1
+        return True
+    if has_markers:
+        return False
+    stats["systems shown with no error span and no [no harm]/[undecidable] token (null)"] += 1
+    return None
+
+
+def detail(target, human, gold):
+    """"harmful" / "undecidable" / "no_harm" / None for one target; gold is judge()'s result."""
+    if gold is None:
         return None
-    if e == s:  # empty span: overlap = touching the position
-        return any(hs <= s <= he for hs, he in human["spans"].get(system, []))
-    return any(hs < e and s < he for hs, he in human["spans"].get(system, []))
+    if gold:
+        return "harmful"
+    return "undecidable" if "undecidable" in human["markers"].get(target.get("system"), ()) else "no_harm"
 
 
 def add_unflagged_systems(rec, by_user, stats):
@@ -172,8 +197,6 @@ def main():
                     help="the annotated LLM preselection: output(s) of 40_find_harmful_errors.py")
     ap.add_argument("-o", "--output", required=True,
                     help="output JSONL; {user} in the name writes one file per annotator")
-    ap.add_argument("--eval", action="store_true",
-                    help="also print the evaluation (eval.py) of every output file")
     args = ap.parse_args()
 
     stats = Counter()
@@ -181,8 +204,8 @@ def main():
     records = load_inputs(args.input, stats)
     users = sorted({u for by_user in gold.values() for u in by_user})
 
-    # labels[record index][target index] = {user: True/False/None}
-    labels, matched = {}, set()
+    # labels[record index][target index] = {user: True/False/None}; details: same with the detail strings
+    labels, details, matched = {}, {}, set()
     for i, rec in enumerate(records):
         name = audio_name(rec.get("audio"))
         if name not in gold:
@@ -191,6 +214,8 @@ def main():
         matched.add(name)
         add_unflagged_systems(rec, gold[name], stats)
         labels[i] = [{u: judge(t, h, stats) for u, h in gold[name].items()} for t in rec["targets"]]
+        details[i] = [{u: detail(t, gold[name][u], v) for u, v in per_user.items()}
+                      for t, per_user in zip(rec["targets"], labels[i])]
         for t, per_user in zip(rec["targets"], labels[i]):
             vals = {u: v for u, v in per_user.items() if v is not None}
             if len(set(vals.values())) > 1:
@@ -216,31 +241,32 @@ def main():
                                for s, e in flagged.get((name, system), [])):
                         stats["human spans not overlapping any flagged span"] += 1
 
-    def write(path, value_of):
+    def write(path, value_of, detail_of):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        counts, n, written = Counter(), 0, []
+        counts, kinds, n = Counter(), Counter(), 0
         with open(path, "w", encoding="utf-8") as out:
             for i, rec in enumerate(records):
                 if i not in labels:
                     continue
                 values = [value_of(per_user) for per_user in labels[i]]
+                detail_values = [detail_of(per_user) for per_user in details[i]]
                 if all(v is None for v in values):
                     continue  # the annotator(s) did not see any of the targets
                 out_rec = copy.deepcopy(rec)
                 out_rec["gold_annotations"] = values
+                out_rec["gold_annotation_details"] = detail_values
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
-                written.append(out_rec)
                 n += 1
                 counts.update("null" if v is None else str(v).lower() for v in values)
+                kinds.update("null" if v is None else v for v in detail_values)
         shout(f"-> {path}: {n} segments, targets: "
-              + ", ".join(f"{k} {counts[k]}" for k in ("true", "false", "null")))
-        if args.eval:
-            evaluation.report(written, title=path)
-            print()
+              + ", ".join(f"{k} {counts[k]}" for k in ("true", "false", "null"))
+              + " | details: " + ", ".join(f"{k} {kinds[k]}" for k in ("harmful", "no_harm", "undecidable", "null")))
 
     if "{user}" in args.output:
         for u in users:
-            write(args.output.replace("{user}", u), lambda per_user, u=u: per_user.get(u))
+            write(args.output.replace("{user}", u), lambda per_user, u=u: per_user.get(u),
+                  lambda per_user, u=u: per_user.get(u))
     else:
         if len(users) > 1:
             shout(f"note: {len(users)} annotators combined: true only if all who saw a target marked it")
@@ -249,7 +275,15 @@ def main():
             vals = [v for v in per_user.values() if v is not None]
             return all(vals) if vals else None
 
-        write(args.output, combined)
+        def combined_detail(per_user):
+            vals = [v for v in per_user.values() if v is not None]
+            if not vals:
+                return None
+            if all(v == "harmful" for v in vals):
+                return "harmful"
+            return "undecidable" if "undecidable" in vals else "no_harm"
+
+        write(args.output, combined, combined_detail)
 
     shout(f"annotators: {', '.join(users) or '-'}")
     for k, v in sorted(stats.items()):

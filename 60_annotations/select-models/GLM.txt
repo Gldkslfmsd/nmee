@@ -1,10 +1,44 @@
 ========================================================================
-EVALUATION: GLM.jsonl  (0 segments)
+EVALUATION: GLM.jsonl  (18 segments)
 ========================================================================
 
+canary_asr (ASR)  (18 targets)
+                  gold yes   gold no  |  no_harm  undecidable
+         flagged         2         3  |        1            2
+     not flagged         0        13  |       13            0
+  accuracy 0.833 | precision 0.400 | recall 1.000 | F1 0.571
+
+canary_cs  (17 targets)
+                  gold yes   gold no  |  no_harm  undecidable
+         flagged        12         5  |        4            1
+     not flagged         0         0  |        0            0
+  accuracy 0.706 | precision 0.706 | recall 1.000 | F1 0.828
+
+overall  (35 targets)
+                  gold yes   gold no  |  no_harm  undecidable
+         flagged        14         8  |        5            3
+     not flagged         0        13  |       13            0
+  accuracy 0.771 | precision 0.636 | recall 1.000 | F1 0.778
+
 summary                      n    TP    FP    FN    TN     acc    prec     rec      F1
+canary_asr (ASR)            18     2     3     0    13   0.833   0.400   1.000   0.571
+canary_cs                   17    12     5     0     0   0.706   0.706   1.000   0.828
+overall                     35    14     8     0    13   0.771   0.636   1.000   0.778
 
 audio duration
-  unknown (no beg/end and no readable audio)
-  note: only LLM-preselected segments were annotated; recall is within those segments
+  all segments                         18 segments,   3 documents, total 0:01:52 | per segment: mean 6.2s, median 4.4s, min 1.1s, max 20.0s
+  segments with a confirmed error      13 segments,   3 documents, total 0:01:19 | per segment: mean 6.1s, median 4.3s, min 2.1s, max 20.0s
 
+original documents (--input-segments)
+  input                        2000 segments,   25 documents, audio 4:00:39
+  documents in evaluation       288 segments,    3 documents, audio 0:29:52
+  annotated                      18 segments (6.25% of these documents), audio 0:01:52 (6.22%)
+
+harm rates  (errors = human-confirmed: gold yes; flags = LLM-flagged spans; /h = per hour of audio)
+                          errors  /h annot.  /h docs  /100 seg  flags  flags/h   TP/h
+canary_asr (ASR)               2      64.56     4.02      0.69      5    10.04   4.02
+canary_cs                     12     387.37    24.10      4.17     17    34.15  24.10
+overall                       14     451.94    28.12      4.86     22    44.19  28.12
+segments with an error        13     419.66    26.11      4.51
+  /h docs and /100 seg count only annotated segments: lower bounds unless every preselected segment of these documents was annotated
+  note: only LLM-preselected segments were annotated; recall is within those segments

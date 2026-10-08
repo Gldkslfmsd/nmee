@@ -7,6 +7,8 @@ Every item of "targets" is one decision, paired with its entry in "gold_annotati
   predicted positive  the LLM flagged a span ("span" is not null)
   predicted negative  a target without a span (the LLM flagged nothing in this system and segment)
   gold                true / false from the annotator; null entries are skipped
+                      "gold no" is split by "gold_annotation_details" into no_harm (the annotator chose
+                      [no harm]) and undecidable (the annotator chose [undecidable]); both count as gold no
 
 For each system (the ASR marked as such), for all translations together, and overall, it prints the
 confusion matrix and accuracy, precision, recall and F1, and then a summary of the audio duration of the
@@ -21,8 +23,9 @@ The rates over the original documents count only the annotated segments, so they
 every LLM-preselected segment of these documents was annotated.
 
 Caveats: the segments are the ones the LLM preselected (only those were annotated), so recall is recall
-within the preselected segments, not over the whole data. An error the annotator marked elsewhere in a
-system where the LLM flagged a different span is not counted as a miss (see pearmut_to_jsonl.py).
+within the preselected segments, not over the whole data. Gold is a verdict on the whole output of a
+system: true if the annotator marked a harmful error anywhere in it, not necessarily at the span the LLM
+flagged (see pearmut_to_jsonl.py).
 """
 import argparse
 import json
@@ -49,7 +52,10 @@ def count(records):
         if gold is None or len(gold) != len(targets):
             skipped["records without matching gold_annotations"] += 1
             continue
-        for t, g in zip(targets, gold):
+        details = rec.get("gold_annotation_details")
+        if details is None or len(details) != len(targets):
+            details = [None] * len(targets)  # older files without details: nothing is undecidable
+        for t, g, d in zip(targets, gold, details):
             if g is None:
                 skipped["targets with null gold"] += 1
                 continue
@@ -58,9 +64,12 @@ def count(records):
             is_asr[system] = is_asr.get(system, False) or asr
             pred = t.get("span") is not None
             cell = "tp" if pred and g else "fp" if pred else "fn" if g else "tn"
+            kind = None if g else "un" if d == "undecidable" else "nh" if d == "no_harm" else None
             for group in (system, "all translations" if not asr else None, "overall"):
                 if group:
                     groups.setdefault(group, Counter())[cell] += 1
+                    if kind:  # split of the gold-no cells (fp, tn) by the annotator's token
+                        groups[group][f"{cell}_{kind}"] += 1
     return groups, skipped, is_asr
 
 
@@ -225,9 +234,13 @@ def report(records, title=None, out=sys.stdout, segments=None, duplicates=0):
         n, acc, p, r, f1 = metrics(c)
         label = f"{group} (ASR)" if is_asr.get(group) else group
         print(f"\n{label}  ({n} targets)", file=out)
-        print(f"{'':>16}{'gold yes':>10}{'gold no':>10}", file=out)
-        print(f"{'flagged':>16}{c['tp']:>10}{c['fp']:>10}", file=out)
-        print(f"{'not flagged':>16}{c['fn']:>10}{c['tn']:>10}", file=out)
+        split = any(c[k] for k in ("fp_nh", "fp_un", "tn_nh", "tn_un"))  # files without details: no split
+        head = f"  | {'no_harm':>8}{'undecidable':>13}" if split else ""
+        flagged_split = f"  | {c['fp_nh']:>8}{c['fp_un']:>13}" if split else ""
+        unflagged_split = f"  | {c['tn_nh']:>8}{c['tn_un']:>13}" if split else ""
+        print(f"{'':>16}{'gold yes':>10}{'gold no':>10}{head}", file=out)
+        print(f"{'flagged':>16}{c['tp']:>10}{c['fp']:>10}{flagged_split}", file=out)
+        print(f"{'not flagged':>16}{c['fn']:>10}{c['tn']:>10}{unflagged_split}", file=out)
         print(f"  accuracy {fmt(acc)} | precision {fmt(p)} | recall {fmt(r)} | F1 {fmt(f1)}", file=out)
 
     print(f"\n{'summary':<24}{'n':>6}{'TP':>6}{'FP':>6}{'FN':>6}{'TN':>6}"
