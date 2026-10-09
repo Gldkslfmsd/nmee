@@ -1,9 +1,9 @@
 earnings25
+    - earnings-25_paths.sh : the paths where runner scripts find this dataset content
 Lux. Parliament
 Czech Parliament
 
 To be done:
 - document each orig dataset source: url for click and download + publication
 - include scripts for automatic download and unzip
-- ...into some standardized location where other scripts find them
-    - but, this is currently not needed, a human author will specify path to audios in `../20_systems/run_canary.py` script.
+- ...into location specified in earnings-25_paths.sh and similar where other scripts find them
