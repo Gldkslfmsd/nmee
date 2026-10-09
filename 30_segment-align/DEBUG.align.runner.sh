@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# this was used only in debugging the runner.sh script. Not useful anymore.
+
 #python3 add_and_align_sentences.py \
 #    --input out-asr.jsonl --output o.jsonl \
 #    --document abcdocument --dataset earnings-25 --src-language en --segmented-by canary-asr+moses+gapshalved+min1sec --audio-dir audio --input-name canary_en --with-words
