@@ -24,6 +24,11 @@ Output: the input records of the segments annotated in pearmut, plus
     no_harm       the annotator selected [no harm] for this system's output (gold_annotations false)
     null          as in gold_annotations
   gold_annotations is not changed by this: it is false for both "no_harm" and "undecidable".
+  "gold_spans": [[{"start": 144, "end": 148, "text": "..."}, ...], [], null, ...]   -- one per item of
+  "targets": the error spans the annotator marked in the output of the target's system, as character
+  offsets in the pearmut text of that system (end exclusive) with the marked text. [] if gold_annotations
+  is false, null if it is null. The spans belong to the system output, so all targets of the same system in
+  a segment have the same list. Used by eval-recall.py to count the characters and words in harmful spans.
 A system shown in pearmut that has no target in the record (e.g. the ASR, when the LLM flagged only
 the translation) is added to "targets" as a target without a span:
     {"tgt_lan": ..., "system": ..., "text": ..., "span": null, "span_start": null, "span_end": null}
@@ -34,6 +39,8 @@ and kept from the first file only. Several --pearmut files are merged too. With 
 output file per annotator; otherwise the labels of all annotators are combined: true only if every
 annotator who saw the target marked it. In the details, "harmful" needs all annotators who saw the target,
 "undecidable" is given if any of them chose it (and not all said harmful), else "no_harm".
+In gold_spans, the output of one annotator has the spans as marked; the combined output has the spans of
+all annotators who saw the system (only where the combined gold is true), overlapping spans merged.
 Disagreements between annotators are reported either way.
 The evaluation (confusion matrix, accuracy, precision, recall) is done separately by eval.py.
 Segments are matched by the audio file name. The position of the flagged span does not decide the gold
@@ -241,7 +248,26 @@ def main():
                                for s, e in flagged.get((name, system), [])):
                         stats["human spans not overlapping any flagged span"] += 1
 
-    def write(path, value_of, detail_of):
+    def human_spans(i, k, users):
+        """Error spans of the system of target k of record i, from the given annotators who saw it."""
+        rec = records[i]
+        system, name = rec["targets"][k].get("system"), audio_name(rec.get("audio"))
+        found, text = [], None
+        for u in users:
+            h = gold[name].get(u)
+            if h is None or system not in h["texts"]:
+                continue
+            text = h["texts"][system] or "" if text is None else text
+            found += h["spans"].get(system, [])
+        merged = []
+        for s_, e_ in sorted(found):
+            if merged and s_ < merged[-1][1]:  # overlapping spans of several annotators become one
+                merged[-1][1] = max(merged[-1][1], e_)
+            else:
+                merged.append([s_, e_])
+        return [{"start": s_, "end": e_, "text": (text or "")[s_:e_]} for s_, e_ in merged]
+
+    def write(path, value_of, detail_of, users_of):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         counts, kinds, n = Counter(), Counter(), 0
         with open(path, "w", encoding="utf-8") as out:
@@ -255,6 +281,8 @@ def main():
                 out_rec = copy.deepcopy(rec)
                 out_rec["gold_annotations"] = values
                 out_rec["gold_annotation_details"] = detail_values
+                out_rec["gold_spans"] = [human_spans(i, k, users_of) if v else None if v is None else []
+                                         for k, v in enumerate(values)]
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
                 n += 1
                 counts.update("null" if v is None else str(v).lower() for v in values)
@@ -266,7 +294,7 @@ def main():
     if "{user}" in args.output:
         for u in users:
             write(args.output.replace("{user}", u), lambda per_user, u=u: per_user.get(u),
-                  lambda per_user, u=u: per_user.get(u))
+                  lambda per_user, u=u: per_user.get(u), [u])
     else:
         if len(users) > 1:
             shout(f"note: {len(users)} annotators combined: true only if all who saw a target marked it")
@@ -283,7 +311,7 @@ def main():
                 return "harmful"
             return "undecidable" if "undecidable" in vals else "no_harm"
 
-        write(args.output, combined, combined_detail)
+        write(args.output, combined, combined_detail, users)
 
     shout(f"annotators: {', '.join(users) or '-'}")
     for k, v in sorted(stats.items()):
