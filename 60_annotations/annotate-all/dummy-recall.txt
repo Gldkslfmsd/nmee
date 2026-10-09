@@ -1,0 +1,51 @@
+========================================================================
+HARMFUL SPANS: dummy.jsonl  (100 segments)
+========================================================================
+
+canary_cs  (100 outputs, 8,970 characters, 1,428 words)
+  outputs with a harmful span 9 (9.0%) | no_harm 86 | undecidable 5
+  human harmful spans: 10, 1.11 per harmful output
+    characters       67 =   0.7% of all characters   per span: mean 6.7, median 6.5, max 10
+    words            10 =   0.7% of all words        per span: mean 1.0, median 1, max 1
+  LLM-flagged spans: 100 in 100 outputs
+    characters    2,077 =  23.2% of all characters
+    words           362 =  25.4% of all words
+  coverage          human  covered  recall        95% CI  |     LLM  correct  precision
+    characters       67       24   0.358                |   2,077       24      0.012
+    words            10        4   0.400                |     362        4      0.011
+    spans            10        4   0.400   [0.17,0.69]  |     100        4      0.040
+    outputs           9        9   1.000   [0.70,1.00]  |     100        9      0.090
+
+overall  (100 outputs, 8,970 characters, 1,428 words)
+  outputs with a harmful span 9 (9.0%) | no_harm 86 | undecidable 5
+  human harmful spans: 10, 1.11 per harmful output
+    characters       67 =   0.7% of all characters   per span: mean 6.7, median 6.5, max 10
+    words            10 =   0.7% of all words        per span: mean 1.0, median 1, max 1
+  LLM-flagged spans: 100 in 100 outputs
+    characters    2,077 =  23.2% of all characters
+    words           362 =  25.4% of all words
+  coverage          human  covered  recall        95% CI  |     LLM  correct  precision
+    characters       67       24   0.358                |   2,077       24      0.012
+    words            10        4   0.400                |     362        4      0.011
+    spans            10        4   0.400   [0.17,0.69]  |     100        4      0.040
+    outputs           9        9   1.000   [0.70,1.00]  |     100        9      0.090
+
+summary                  outputs harmful  spans   chars  %chars  words  %words | rec.char rec.word rec.span rec.out
+canary_cs                    100       9     10      67    0.7%     10    0.7% |    0.358    0.400    0.400   1.000
+overall                      100       9     10      67    0.7%     10    0.7% |    0.358    0.400    0.400   1.000
+
+annotated: 100 segments, audio 0:10:49; 9 (9.0%) with a harmful span [0.05,0.16]
+
+original data (--input-segments)
+  input        22671 segments,  290 documents, audio 45:49:57
+  annotated      100 segments (0.44% of the input), audio 0:10:49 (0.39%)
+
+harmful spans and words per hour of annotated audio and per 100 annotated segments; 'est. input' = count x 226.7
+(the estimate is valid only if the annotated segments are a random sample of the input)
+                          spans  words  spans/h  words/h spans/100 words/100  est.spans  est.words
+canary_cs                    10     10    55.46    55.46     10.00     10.00       2267       2267
+overall                      10     10    55.46    55.46     10.00     10.00       2267       2267
+segments with a harmful span: 9 of 100 annotated (9.0%, 95% CI [0.05,0.16]); est. 2040 of 22671 input segments
+
+  skipped: outputs with null gold: 1181
+  note: the numbers describe the annotated segments; they estimate the whole data only if these segments are a random sample
