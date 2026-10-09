@@ -16,6 +16,10 @@ Segment ASR to sentences, segment audio, align target sentences to ASR.
   - `alignments.py` -- used by `30_...`
 
 
+- `runner.sh ${DATASET}` -- all in one script, it should work for all datasets (now only earnings-25)
+    - it uses `../10_datasets/${DATASET}_paths.sh` that specifies data paths
+
+
 ## Format
 
 - jsonl, one line is one sentence
