@@ -9,17 +9,21 @@ Usage:
     python segment_audio.py OUT_DIR \
         --audio-dir ~/work/uedin/mtm26/nmee/iwslt26-cs-dev/audio \
         --translations-dir ~/work/uedin/mtm26/nmee/outputs/iwslt26-cs-dev \
-        [--suffix .en.jsonl] [--pad 0.2] [--how-many 3] [--debug-prints DEBUG_DIR] [-j JOBS]
+        [--suffix .en.jsonl] [--pad 0.2] [--how-many 3] [--debug-prints DEBUG_DIR] [-j JOBS] [--tmp-dir DIR]
 
 --how-many N          process only the first N documents (sorted by name), for debugging
 --debug-prints DIR    write DIR/<doc>.txt with "start<TAB>end<TAB>text" per segment, plus DIR/stats.txt
                       with statistics (durations, shortest segments, empty texts, overlaps, segments
                       outside the audio); the statistics are also printed to stderr
--j, --jobs N          number of parallel workers (default: number of CPUs)
+-j, --jobs N          number of parallel workers, one document per worker (default: number of CPUs)
+--tmp-dir DIR         where to put temporary decoded WAVs (default: system temp dir, $TMPDIR)
 
-Clips are always written as WAV. PCM WAV input is cut with the Python standard library (wave), one
-document per worker; other formats (mp3, flac, ...) and WAVs that `wave` can't read are cut with `ffmpeg`,
-or `sox` if ffmpeg is not on PATH (note that sox often lacks mp3 support), one segment per worker.
+Clips are always written as WAV in the source's original sample format (sample rate, bit depth,
+int/float, channels). Uncompressed WAV input (PCM, float, A-law/mu-law, WAVE_FORMAT_EXTENSIBLE) is cut by
+copying raw bytes, with the source's fmt chunk copied verbatim into every clip. Other formats (mp3, flac,
+...) are first decoded ONCE per document to a temporary WAV in the decoder's native sample format with
+`ffmpeg` (or `sox` if ffmpeg is not on PATH), which is then cut the same way. This avoids spawning one
+process per segment, which re-probes and often re-decodes the file from the start every time.
 The work is subprocess- and I/O-bound, so a thread pool is used.
 """
 import argparse
@@ -29,7 +33,8 @@ import shutil
 import statistics
 import subprocess
 import sys
-import wave
+import struct
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -50,23 +55,63 @@ def find_audio(audio_dir, stem, exts):
     return None
 
 
+# PCM, IEEE float, A-law, mu-law, extensible: all have a fixed number of bytes per frame
+CUTTABLE_TAGS = {1, 3, 6, 7, 0xFFFE}
+
+
+def wav_layout(path):
+    """Walk the RIFF chunks of a WAV file.
+    Returns (fmt_chunk, sample_rate, block_align, data_offset, n_frames)."""
+    fsize = os.path.getsize(path)
+    with open(path, "rb") as f:
+        hdr = f.read(12)
+        if hdr[:4] != b"RIFF" or hdr[8:12] != b"WAVE":
+            raise ValueError("not a RIFF/WAVE file")
+        fmt = None
+        while True:
+            ch = f.read(8)
+            if len(ch) < 8:
+                raise ValueError("no data chunk")
+            cid, size = ch[:4], struct.unpack("<I", ch[4:])[0]
+            if cid == b"fmt ":
+                fmt = f.read(size)
+                f.seek(size % 2, 1)
+            elif cid == b"data":
+                if fmt is None or len(fmt) < 16:
+                    raise ValueError("missing or short fmt chunk")
+                off = f.tell()
+                size = min(size, fsize - off)   # streamed files may have a bogus size
+                sr = struct.unpack("<I", fmt[4:8])[0]
+                ba = struct.unpack("<H", fmt[12:14])[0]
+                if sr <= 0 or ba <= 0:
+                    raise ValueError("invalid sample rate or block align")
+                return fmt, sr, ba, off, size // ba
+            else:
+                f.seek(size + size % 2, 1)
+
+
 def wave_readable(path):
+    """True if the WAV is uncompressed and can be cut by copying bytes, keeping its exact format."""
     if path.suffix.lower() != ".wav":
         return False
     try:
-        with wave.open(str(path), "rb"):
+        fmt = wav_layout(path)[0]
+        tag = struct.unpack("<H", fmt[:2])[0]
+        if tag in CUTTABLE_TAGS:
             return True
-    except (wave.Error, EOFError) as e:
-        print(f"{path}: wave module failed ({e}), using an external tool", file=sys.stderr)
-        return False
+        reason = f"format tag {tag:#x} is compressed"
+    except (OSError, ValueError, struct.error) as e:
+        reason = str(e)
+    print(f"{path}: can't cut directly ({reason}), decoding once with an external tool", file=sys.stderr)
+    return False
 
 
 def audio_duration(path):
     if path.suffix.lower() == ".wav":
         try:
-            with wave.open(str(path), "rb") as w:
-                return w.getnframes() / w.getframerate()
-        except (wave.Error, EOFError):
+            _, sr, _, _, n = wav_layout(path)
+            return n / sr
+        except (OSError, ValueError, struct.error):
             pass
     for cmd in (["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
                 ["soxi", "-D", str(path)]):
@@ -78,32 +123,76 @@ def audio_duration(path):
     return None
 
 
+def write_wav(path, fmt, data, n_frames):
+    """Write a WAV with the source's fmt chunk copied verbatim, so sample rate, bit depth,
+    int/float and channel layout are exactly the original's."""
+    tag = struct.unpack("<H", fmt[:2])[0]
+    chunks = [b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"\0" * (len(fmt) % 2)]
+    if tag != 1:   # non-PCM formats should carry a fact chunk with the frame count
+        chunks.append(b"fact" + struct.pack("<II", 4, n_frames))
+    chunks.append(b"data" + struct.pack("<I", len(data)))
+    head = b"".join(chunks)
+    with open(path, "wb") as o:
+        o.write(b"RIFF" + struct.pack("<I", 4 + len(head) + len(data) + len(data) % 2) + b"WAVE")
+        o.write(head)
+        o.write(data)
+        if len(data) % 2:
+            o.write(b"\0")
+
+
 def cut_with_wave(wav_path, segs, out_dir, stem, pad):
-    """Cut a whole document in-process (sequential reads of one file are fastest)."""
-    with wave.open(str(wav_path), "rb") as w:
-        params = w.getparams()
-        sr, n = w.getframerate(), w.getnframes()
+    """Cut a whole document in-process by copying raw frames (sequential reads of one file are fastest)."""
+    fmt, sr, ba, off, n = wav_layout(wav_path)
+    with open(wav_path, "rb") as f:
         for i, s in enumerate(segs):
-            a = max(0, int((s["start"] - pad) * sr))
+            a = min(n, max(0, int((s["start"] - pad) * sr)))
             b = min(n, int((s["end"] + pad) * sr))
-            w.setpos(min(a, n))
-            frames = w.readframes(max(0, b - a))
-            with wave.open(str(out_dir / f"{stem}.{i:04d}.wav"), "wb") as o:
-                o.setparams(params)
-                o.writeframes(frames)
+            f.seek(off + a * ba)
+            data = f.read(max(0, b - a) * ba)
+            write_wav(out_dir / f"{stem}.{i:04d}.wav", fmt, data, len(data) // ba)
 
 
-def cut_one_external(tool, path, seg, out_path, pad):
-    """Cut a single segment with ffmpeg or sox."""
-    a = max(0.0, seg["start"] - pad)
-    dur = max(0.0, (seg["end"] + pad) - a)
+PCM_CODEC = {"u8": "pcm_u8", "s16": "pcm_s16le", "flt": "pcm_f32le", "dbl": "pcm_f64le", "s64": "pcm_s64le"}
+
+
+def pcm_codec_for(path):
+    """PCM codec that holds the decoder's native sample format losslessly."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+                              "stream=sample_fmt,bits_per_raw_sample", "-of", "json", str(path)],
+                             capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL)
+        st = json.loads(out.stdout)["streams"][0]
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, IndexError):
+        return "pcm_f32le"
+    sfmt = st.get("sample_fmt", "").rstrip("p")   # planar variants (fltp, s16p) -> packed
+    if sfmt == "s32":
+        return "pcm_s24le" if str(st.get("bits_per_raw_sample")) == "24" else "pcm_s32le"
+    return PCM_CODEC.get(sfmt, "pcm_f32le")
+
+
+def decode_to_wav(tool, src, dst):
+    """Decode a whole file once to WAV, keeping sample rate, channels and sample format."""
     if tool == "ffmpeg":
         # -nostdin: parallel ffmpeg processes would otherwise fight over the terminal's stdin
-        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{dur:.3f}",
-               "-i", str(path), str(out_path)]
+        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(src),
+               "-vn", "-c:a", pcm_codec_for(src), "-f", "wav", str(dst)]
     else:
-        cmd = ["sox", str(path), str(out_path), "trim", f"{a:.3f}", f"{dur:.3f}"]
+        cmd = ["sox", str(src), str(dst)]   # sox keeps the input's precision by default
     subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
+
+
+def cut_doc(wav, segs, out_dir, stem, pad, use_wave, tool, tmp_dir):
+    """One job per document: cut directly, or decode once to a temp WAV and cut that."""
+    if use_wave:
+        cut_with_wave(wav, segs, out_dir, stem, pad)
+        return
+    fd, tmp = tempfile.mkstemp(prefix=f"{stem}.", suffix=".wav", dir=tmp_dir)
+    os.close(fd)
+    try:
+        decode_to_wav(tool, wav, tmp)
+        cut_with_wave(Path(tmp), segs, out_dir, stem, pad)
+    finally:
+        os.unlink(tmp)
 
 
 # ---------------------------------------------------------------- debug output
@@ -176,7 +265,9 @@ def main():
     ap.add_argument("--debug-prints", metavar="DIR", default=None,
                     help="write start/end/text TSV per document and statistics into DIR. It is named *.txt so that it can be open in Audacity.")
     ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4,
-                    help="number of parallel workers (default: number of CPUs)")
+                    help="number of parallel workers, one document each (default: number of CPUs)")
+    ap.add_argument("--tmp-dir", default=None,
+                    help="directory for temporary decoded WAVs (default: system temp dir / $TMPDIR)")
     args = ap.parse_args()
 
     out_root = Path(args.out_dir)
@@ -198,46 +289,37 @@ def main():
         # phase 1: prepare all documents in parallel (map keeps the sorted order for the report)
         docs = list(ex.map(lambda jf: prepare_doc(jf, args.suffix, audio_dir, exts, debug_dir), files))
 
-        # phase 2: build the job list. Whole-document wave jobs go first because they are the
-        # longest single tasks; per-segment ffmpeg/sox jobs then fill up the remaining workers.
-        doc_jobs, seg_jobs, remaining = [], [], {}
+        # phase 2: one job per document
+        jobs = []
         for d in docs:
             stem, wav, segs = d["stem"], d["wav"], d["segs"]
             if wav is None:
                 print(f"WARNING: no audio for {stem} in {audio_dir} ({', '.join(exts)})", file=sys.stderr)
                 continue
+            if not d["use_wave"] and ext_tool is None:
+                sys.exit(f"{wav}: needs ffmpeg or sox on PATH")
             out_dir = out_root / stem
             out_dir.mkdir(parents=True, exist_ok=True)
             d["out_dir"] = out_dir
             if not segs:
                 print(f"{stem}: 0 clips -> {out_dir}")
                 continue
-            if d["use_wave"]:
-                doc_jobs.append((stem, cut_with_wave, (wav, segs, out_dir, stem, args.pad)))
-                remaining[stem] = 1
-            else:
-                if ext_tool is None:
-                    sys.exit(f"{wav}: needs ffmpeg or sox on PATH")
-                for i, s in enumerate(segs):
-                    seg_jobs.append((stem, cut_one_external,
-                                     (ext_tool, wav, s, out_dir / f"{stem}.{i:04d}.wav", args.pad)))
-                remaining[stem] = len(segs)
+            jobs.append(d)
+        # largest files first, so that the longest job does not start last
+        jobs.sort(key=lambda d: d["wav"].stat().st_size, reverse=True)
 
-        # phase 3: run everything, report each document when its last job finishes
-        by_stem = {d["stem"]: d for d in docs}
+        # phase 3: run everything, report each document when it finishes
         failed = 0
-        futs = {ex.submit(fn, *a): stem for stem, fn, a in doc_jobs + seg_jobs}
+        futs = {ex.submit(cut_doc, d["wav"], d["segs"], d["out_dir"], d["stem"], args.pad,
+                          d["use_wave"], ext_tool, args.tmp_dir): d for d in jobs}
         for f in as_completed(futs):
-            stem = futs[f]
+            d = futs[f]
             try:
                 f.result()
+                print(f"{d['stem']}: {len(d['segs'])} clips -> {d['out_dir']}")
             except Exception as e:
                 failed += 1
-                print(f"ERROR in {stem}: {e}", file=sys.stderr)
-            remaining[stem] -= 1
-            if remaining[stem] == 0:
-                d = by_stem[stem]
-                print(f"{stem}: {len(d['segs'])} clips -> {d['out_dir']}")
+                print(f"ERROR in {d['stem']}: {e}", file=sys.stderr)
 
     if debug_dir:
         all_durs, all_segs, all_probs, doc_lines = [], [], [], []

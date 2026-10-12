@@ -7,19 +7,57 @@ Usage:
     python convert_to_jsonl.py input.json output.jsonl --keep-speaker
 """
 import argparse
+import difflib
 import json
 
 from fix_punct import fix_punct
+
+
+def fix_words(words):
+    """Apply fix_punct to the word sequence and split the result back onto the words.
+
+    Words keep a leading space only if they are space-separated from the previous
+    word after the fix: [" Sechs", " -Minuten", " -Takt"] -> [" Sechs", "-Minuten", "-Takt"],
+    [" d'", " Sitzung"] -> [" d'", "Sitzung"], [" 800", " 1000000"] -> [" 800", " Milliounen"].
+    """
+    raw = "".join(w["word"] for w in words)
+    owner = [i for i, w in enumerate(words) for _ in w["word"]]  # word index of each raw char
+    fixed = fix_punct(raw)
+    if fixed == raw:
+        return words
+
+    pieces = [[] for _ in words]
+    sm = difflib.SequenceMatcher(None, raw, fixed, autojunk=False)
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op == "delete":
+            continue
+        for k, j in enumerate(range(j1, j2)):
+            if op == "insert":  # inserted text belongs to the word before it
+                i = max(i1 - 1, 0)
+            else:  # equal / replace: map position by position, clamped to the replaced span
+                i = min(i1 + k, i2 - 1)
+            pieces[owner[i]].append(fixed[j])
+
+    out = []
+    for w, chars in zip(words, pieces):
+        text = "".join(chars)
+        if text.strip():  # a word whose text vanished completely is dropped
+            out.append({**w, "word": text})
+    return out
 
 
 def convert(segments, keep_speaker=False):
     for seg in segments:
         words = []
         for w in seg.get("words", []):
-            text = w.get("word", "").strip()
-            if not text or w.get("start") is None or w.get("end") is None:
+            text = w.get("word", "")
+            if not text.strip() or w.get("start") is None or w.get("end") is None:
                 continue
             words.append({"word": text, "start": w["start"], "end": w["end"]})
+        # a segment always starts a new token: make sure its first word carries the left space
+        if words and not words[0]["word"][0].isspace():
+            words[0]["word"] = " " + words[0]["word"]
+        words = fix_words(words)
 
         start = seg.get("start", words[0]["start"] if words else None)
         end = seg.get("end", words[-1]["end"] if words else None)
@@ -27,7 +65,7 @@ def convert(segments, keep_speaker=False):
             continue
 
         out = {
-            "segment": fix_punct(seg.get("text", " ".join(w["word"] for w in words)).strip()),
+            "segment": fix_punct(seg.get("text", "".join(w["word"] for w in words)).strip()),
             "start": start,
             "end": end,
             "words": words,

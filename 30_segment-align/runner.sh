@@ -3,6 +3,7 @@
 if [ -z "$1" ]; then
     dataset=earnings-25
     echo "No dataset specified, using default: $dataset" >&2
+    insertspaces="--insert-spaces"
 else
     dataset=$1
     echo "Using dataset: $dataset" >&2
@@ -15,7 +16,7 @@ if [ "$USER" == "machacek" ]; then
     source p3.12/bin/activate 
 fi
 
-python3 10_asr_sentences.py $canary_outputs_dir $segmented_systems_dir
+python3 10_asr_sentences.py $canary_outputs_dir $segmented_systems_dir $insertspaces
 python3 20_segment_audio.py --audio-dir $orig_audio_dir --translations-dir $segmented_systems_dir $segmented_audio_dir 
 
 if [ -f $segmented_systems_merged.ok ]; then

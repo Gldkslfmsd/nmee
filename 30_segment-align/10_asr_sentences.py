@@ -52,23 +52,44 @@ def make_splitter(backend, lang):
     return (lambda text: s.split(text=text)), (lambda: None)
 
 
-def split_sentences(words, split):
-    """Group word indices into sentences. Moses only splits between tokens, so each sentence's
-    whitespace tokens correspond 1:1 to consecutive ASR words."""
-    text = " ".join(w["word"].strip() for w in words)
-    groups, i = [], 0
+def split_sentences(pieces, split):
+    """Group word indices into sentences.
+
+    pieces[k] is the text of word k as it appears in the document text, which is "".join(pieces).
+    A whitespace token of the text can span several ASR words, e.g. [" d'", "Sitzung"] -> "d'Sitzung",
+    so tokens are not counted 1:1 against words. Instead, each sentence's tokens are located in the text
+    by character position, and a word belongs to the sentence in which its first character lies.
+    Moses only splits at whitespace, so glued words always stay in one sentence.
+    """
+    text = "".join(pieces)
+    # character position of the first non-space character of each word
+    starts, pos = [], 0
+    for p in pieces:
+        starts.append(pos + len(p) - len(p.lstrip()))
+        pos += len(p)
+
+    groups, i, cursor = [], 0, 0
     for sent in split(text):
-        n = len(sent.split())
-        if n == 0:
+        toks = sent.split()
+        if not toks:
             continue
-        g = list(range(i, min(i + n, len(words))))
-        if " ".join(words[k]["word"].strip() for k in g) != " ".join(sent.split()):
+        for tok in toks:
+            idx = text.find(tok, cursor)
+            if idx < 0:
+                print(f"WARNING: token {tok!r} not found in the ASR text, sentence {sent[:60]!r}",
+                      file=sys.stderr)
+                continue
+            cursor = idx + len(tok)
+        g = []
+        while i < len(pieces) and starts[i] < cursor:
+            g.append(i)
+            i += 1
+        if " ".join("".join(pieces[k] for k in g).split()) != " ".join(toks):
             print(f"WARNING: sentence does not match the ASR words: {sent[:60]!r}", file=sys.stderr)
         if g:
             groups.append(g)
-        i += n
-    if i < len(words):
-        groups.append(list(range(i, len(words))))
+    if i < len(pieces):
+        groups.append(list(range(i, len(pieces))))
     return groups
 
 
@@ -107,9 +128,13 @@ def merge_short(segs, min_dur):
     return segs
 
 
-def to_record(seg):
+def to_record(seg, insert_spaces=False):
     w = seg["words"]
-    rec = {"segment": " ".join(x["word"].strip() for x in w),
+    if insert_spaces:
+        text = " ".join(x["word"].strip() for x in w)
+    else:  # keep the ASR spacing: words without a leading space stay glued ("d'" + "Sitzung")
+        text = "".join(x["word"] for x in w).strip()
+    rec = {"segment": text,
            "start": round(seg["start"], 3), "end": round(seg["end"], 3)}
     if "start_offset" in w[0] and "end_offset" in w[-1]:
         rec["start_offset"], rec["end_offset"] = w[0]["start_offset"], w[-1]["end_offset"]
@@ -129,6 +154,8 @@ def main():
     ap.add_argument("--min-dur", type=float, default=1.0,
                     help="merge sentences shorter than this (seconds) into the shorter neighbour (default 1 = 1 second)")
     ap.add_argument("--how-many", type=int, default=None, help="process only the first N documents")
+    ap.add_argument("--insert-spaces", action="store_true", default=False,
+                    help="insert spaces between words in the output segments (default: keep original ASR spacing")
     args = ap.parse_args()
 
     split, close = make_splitter(args.backend, args.lang)
@@ -152,11 +179,15 @@ def main():
             print(f"WARNING: {f.name}: {back} word(s) start before the previous word", file=sys.stderr)
         n_canary = sum(1 for l in open(f, encoding="utf-8") if l.strip())
 
-        groups = split_sentences(words, split)
+        if args.insert_spaces:
+            pieces = [" " + w["word"].strip() for w in words]
+        else:
+            pieces = [w["word"] for w in words]
+        groups = split_sentences(pieces, split)
         segs = merge_short(make_segments(groups, words), args.min_dur)
         with open(out_dir / f.name, "w", encoding="utf-8") as o:
             for s in segs:
-                o.write(json.dumps(to_record(s), ensure_ascii=False) + "\n")
+                o.write(json.dumps(to_record(s, args.insert_spaces), ensure_ascii=False) + "\n")
         durs = [s["end"] - s["start"] for s in segs]
         print(f"{stem}: {len(words)} words, {n_canary} Canary segments -> {len(groups)} sentences "
               f"-> {len(segs)} segments (min {min(durs):.2f}s, max {max(durs):.2f}s)")
