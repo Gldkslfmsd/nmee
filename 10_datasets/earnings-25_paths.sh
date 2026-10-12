@@ -8,6 +8,8 @@
 _rootpath="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."  # (except this one, it's the auxiliary variable for the next ones) 
 _rootpath="../"  # (except this one, it's the auxiliary variable for the next ones) 
 
+srclan=en
+
 # directory of original audio. There are many *.mp3 files (or *.wav, or ...), all of them belong to the dataset
 orig_audio_dir=$_rootpath/earnings-25/testset-segmented/audio/
 
