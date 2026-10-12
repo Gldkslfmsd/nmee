@@ -26,6 +26,13 @@ RULES = [
     (re.compile(r"(?<=\w) +\.(?=(?:lu|com|org|net|eu|de|fr|be)\b)"), "."),
     # 7) "Park &Ride" -> "Park & Ride".
     (re.compile(r"(?<=\w) +&(?=\w)"), " & "),
+    # 8) ASR writes "Milliounen"/"Milliarden" as digits: "800 1000000 Euro" -> "800 Milliounen Euro",
+    #    "1 1000000000" -> "1 Milliard". The MT misreads these, e.g. "400 1000000" -> "400,100,000".
+    #    Must run after rule 3, so "2 ,3 1000000" is already "2,3 1000000".
+    (re.compile(r"(?<![\d,.])1 1000000000\b"), "1 Milliard"),
+    (re.compile(r"(?<=\d) 1000000000\b"), " Milliarden"),
+    (re.compile(r"(?<![\d,.])1 1000000\b"), "1 Millioun"),
+    (re.compile(r"(?<=\d) 1000000\b"), " Milliounen"),
 ]
 
 
