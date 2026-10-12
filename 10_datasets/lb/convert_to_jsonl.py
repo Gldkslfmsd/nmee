@@ -9,6 +9,7 @@ Usage:
 import argparse
 import difflib
 import json
+import sys
 
 from fix_punct import fix_punct
 
@@ -46,6 +47,27 @@ def fix_words(words):
     return out
 
 
+def respace_from_text(words, text):
+    """Give each word a leading space exactly when the segment text has a space before it.
+
+    Whisper's word list can lose the left space where the text has one, e.g. at an internal
+    sub-segment boundary: text "ass. D' Bänk", words [" ass.", "D'", " Bänk"]. The text is taken
+    as the reference. A word is matched only right at the current position in the text (after
+    optional whitespace); if the text and the words diverge, the word keeps its own spacing.
+    """
+    out, cur = [], 0
+    for w in words:
+        tok = w["word"].strip()
+        idx = text.find(tok, cur)
+        if idx < 0 or text[cur:idx].strip():
+            out.append(w)  # text and words disagree here; keep the word as it is
+            continue
+        space = idx == 0 or text[idx - 1].isspace()
+        out.append({**w, "word": (" " if space else "") + tok})
+        cur = idx + len(tok)
+    return out
+
+
 def convert(segments, keep_speaker=False):
     for seg in segments:
         words = []
@@ -54,6 +76,8 @@ def convert(segments, keep_speaker=False):
             if not text.strip() or w.get("start") is None or w.get("end") is None:
                 continue
             words.append({"word": text, "start": w["start"], "end": w["end"]})
+        if "text" in seg:
+            words = respace_from_text(words, seg["text"])
         # a segment always starts a new token: make sure its first word carries the left space
         if words and not words[0]["word"][0].isspace():
             words[0]["word"] = " " + words[0]["word"]
@@ -70,6 +94,9 @@ def convert(segments, keep_speaker=False):
             "end": end,
             "words": words,
         }
+        if "".join(w["word"] for w in words).strip() != out["segment"]:
+            print(f"WARNING: words do not match the segment text at {start:.2f}s: "
+                  f"{out['segment'][:60]!r}", file=sys.stderr)
         if keep_speaker and "speaker" in seg:
             out["speaker"] = seg["speaker"]
         yield out
