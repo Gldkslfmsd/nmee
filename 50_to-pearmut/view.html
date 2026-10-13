@@ -1,0 +1,10 @@
+<html>
+    <body>
+        <div id="nav"></div>
+        <script>
+        fetch("nmee_protocol_v5.html")
+            .then(r => r.text())
+            .then(html => document.getElementById("nav").innerHTML = html);
+        </script>
+    </body>
+</html>

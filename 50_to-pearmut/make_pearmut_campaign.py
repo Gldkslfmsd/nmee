@@ -11,18 +11,26 @@ span:
 
 Only the fields Pearmut actually needs are written to the campaign: per item "item_id", "src",
 "tgt", "instructions" and (with --prefill) "error_spans". Columns of one item: the ASR
-transcript first (--no-asr-column turns it off), then the target systems that have a flagged span
+transcript first (see --include-asr), then the target systems that have a flagged span
 in this segment, at most --max-systems of them (0 = all). The clip and the gold transcript are the
 source side; every flagged span is described in the item's instructions (as an HTML table, see
 instruction_html.py; --no-info leaves it out) and, with --prefill (for view-only debugging), pre-highlighted in its column. Columns are labelled
 with the system name (--show-model-names) and not shuffled.
+
+ASR column (--include-asr):
+  always      in every item that has an "asr" transcript (default)
+  if_flagged  only in items where the ASR is implicated: a flagged span in the ASR itself
+              (a target with system == asr_system), or a flagged span whose "error_source"
+              mentions ASR. Only spans kept by --harmfulness count.
+  off         never
 
 Reference translations come from a separate file: --references-file is the aligned JSONL of
 30_add_and_align_sentences.py (with "text" per system), and --references names the systems in it that
 hold references, e.g. --references reference_cs reference_de. Segments are matched by document and
 start time.
 
-Pages: items are taken document by document (documents sorted by name, items by start time) and
+Pages: items are taken document by document (documents in the order they first appear in the
+input, items by start time) and
 grouped into pages of about 90 seconds of audio; a page is closed as soon as the audio of its
 items (end - beg of each clip) adds up to --seconds-per-page seconds or more. By default a page
 may contain items of several documents. With --wrap-by-documents a page is also closed at every
@@ -90,21 +98,45 @@ def find_reference(refs, rec, tolerance=0.05):
 
 # ---------------------------------------------------------------- selecting the flagged spans
 
-def select(targets, args):
-    """Filter the flagged spans of one segment."""
-    out = targets
+def asr_system_of(rec):
+    return rec.get("asr_system") or "asr"
+
+
+def select(rec, args):
+    """Filter the flagged spans of one segment. Spans in the ASR itself are not subject to
+    --lang (the ASR is in the source language), only to --harmfulness."""
+    out = rec.get("targets", [])
+    asr_system = asr_system_of(rec)
     if args.harmfulness is not None:
         out = [t for t in out if t.get("harmfulness") is None or t["harmfulness"] >= args.harmfulness]
     if args.langs:
-        out = [t for t in out if t.get("tgt_lan") in args.langs]
+        out = [t for t in out if t.get("system") == asr_system or t.get("tgt_lan") in args.langs]
     return out
 
 
+def asr_implicated(rec):
+    """True if a (kept) flagged span is in the ASR itself or is attributed to the ASR."""
+    asr_system = asr_system_of(rec)
+    return any(t.get("system") == asr_system
+               or "asr" in str(t.get("error_source") or "").lower()
+               for t in rec["targets"])
+
+
+def show_asr(rec, args):
+    if args.include_asr == "off":
+        return False
+    if args.include_asr == "if_flagged":
+        return asr_implicated(rec)
+    return True
+
+
 def columns(rec, args):
-    """(tgt, spans): the ASR transcript first, then the target systems that have a flagged span."""
+    """(tgt, spans): the ASR transcript first (if shown), then the target systems that have a
+    flagged span."""
     tgt, spans = {}, defaultdict(list)
-    asr_system = rec.get("asr_system") or "asr"
-    if rec.get("asr") and not args.no_asr_column:
+    asr_system = asr_system_of(rec)
+    with_asr = show_asr(rec, args)
+    if rec.get("asr") and with_asr:
         tgt[asr_system] = rec["asr"]
 
     order = []
@@ -117,7 +149,7 @@ def columns(rec, args):
 
     for t in rec["targets"]:
         system = t["system"]
-        if system not in order or (system == asr_system and args.no_asr_column):
+        if system not in order or (system == asr_system and not with_asr):
             continue
         if tgt.setdefault(system, t.get("text", "")) != t.get("text", ""):
             print(f"WARNING: {rec.get('document')} @{rec.get('beg')}: system {system} has different "
@@ -177,6 +209,7 @@ def build_item(rec, args, refs, assets_url, stats):
     if spans and args.prefill:
         item["error_spans"] = dict(spans)
     stats["items"] += 1
+    stats["items with ASR"] += asr_system_of(rec) in tgt
     stats["spans"] += sum(len(v) for v in spans.values())
     return item
 
@@ -224,7 +257,7 @@ def main():
     ap.add_argument("-o", "--output", required=True)
     ap.add_argument("--audio-relative-to", help="directory the \"audio\" paths are relative to (default: current directory if \"audio\" is relative, absolute otherwise)")
     ap.add_argument("--campaign-id", default="harm_review")
-    ap.add_argument("--assets-url", metavar="ASSETS_URL", 
+    ap.add_argument("--assets-url", metavar="ASSETS_URL",
                     help="URL prefix for clips (default: ./assets/<campaign-id>)")
     ap.add_argument("--copy-assets", metavar="ASSETS_DIR", #default="./data",
                     help="copy the needed clips to ASSETS_DIR/ASSETS_URL/")
@@ -233,14 +266,16 @@ def main():
     ap.add_argument("--harmfulness", type=int, choices=range(0, 6), metavar="0-5",
                     help="keep only spans with harmfulness >= this (spans without one are kept)")
     ap.add_argument("--lang", help="comma-separated target languages to keep, e.g. cs or cs,de "
-                                   "(default: all)")
+                                   "(default: all; spans in the ASR are always kept)")
 
     # columns
     ap.add_argument("--max-systems", type=int, default=2,
                     help="how many target systems per item, in the order they are flagged "
                          "(default: 2; 0 = all)")
-    ap.add_argument("--no-asr-column", action="store_true",
-                    help="do not show the ASR transcript as the first column")
+    ap.add_argument("--include-asr", choices=["if_flagged", "always", "off"], default="always",
+                    help="show the ASR transcript as the first column: always, only if the ASR "
+                         "has a flagged span or a flagged span has an ASR error_source "
+                         "(if_flagged), or never (off). Default: always")
     ap.add_argument("--no-gold", action="store_true", help="do not show the gold transcript")
     ap.add_argument("--no-info", action="store_true",
                     help="do not show the per-item table with the LLM info (suggested span, "
@@ -292,16 +327,16 @@ def main():
         if not line.strip():
             continue
         rec = json.loads(line)
-        rec["targets"] = select(rec.get("targets", []), args)
+        rec["targets"] = select(rec, args)
         if rec["targets"]:
             by_doc[rec.get("document")].append(rec)
             n_errors += len(rec["targets"])
 
     stats = defaultdict(int)
-    docs = sorted(by_doc)
+    docs = list(by_doc)  # in the order of their first appearance in the input
 
     def pages_of(doc_names):
-        """Pages of the given documents: ordered by document, then by start time."""
+        """Pages of the given documents: in the given document order, then by start time."""
         recs = [r for d in doc_names for r in sorted(by_doc[d], key=lambda r: r.get("beg") or 0)]
         return build_pages(recs, args, refs, assets_url, stats)
 
@@ -339,8 +374,9 @@ def main():
     if stats["missing clips"]:
         print(f"WARNING: {stats['missing clips']} clip(s) not found (--audio-relative-to {args.audio_relative_to})",
               file=sys.stderr)
-    print(f"{len(docs)} documents, {n_pages} pages, {stats['items']} items, {n_errors} flagged span(s), "
-          f"{stats['spans']} pre-filled, {len(tasks)} task(s) "
+    print(f"{len(docs)} documents, {n_pages} pages, {stats['items']} items "
+          f"({stats['items with ASR']} with the ASR column, --include-asr {args.include_asr}), "
+          f"{n_errors} flagged span(s), {stats['spans']} pre-filled, {len(tasks)} task(s) "
           f"{'partitioned' if args.partition else 'replicated'} -> {args.output}", file=sys.stderr)
 
 
