@@ -38,8 +38,8 @@ cmd() {
          $partition
 }
 
-#cmd cs $outdir/doc-order.part1.jsonl p1
-#cmd cs $outdir/doc-order.part2.jsonl p2
+cmd_cs $outdir/doc-order.part1.jsonl p1
+cmd_cs $outdir/doc-order.part2.jsonl p2
 
 for lan in fr pl ; do
     d=$outdir/inputs-$lan
