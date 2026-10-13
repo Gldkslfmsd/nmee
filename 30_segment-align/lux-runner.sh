@@ -44,12 +44,10 @@ fi
 
 for tgt in $canary_target_langs ; do
     echo "Processing $tgt"
-    add=$canary_outputs_dir/*.$tgt.jsonl
+    add=../20_systems/lb/*.$tgt.jsonl
     python 30_add_and_align_sentences.py --input $segmented_systems_merged \
-        --output $segmented_systems_merged --name luxmt_$tgt --lan $tgt --with-words \
-        --align vecalign --align-to luxasr --overwrite \
-        --embed-model fredxlpy/LuxEmbedder \
-        --split-method embed --split-window 8  \
+        --output $segmented_systems_merged --name luxmt_$tgt --lan $tgt \
+        --align lines --align-to luxasr --overwrite \
         --add $add
 done
 

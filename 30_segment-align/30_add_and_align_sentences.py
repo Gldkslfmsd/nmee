@@ -9,7 +9,10 @@ Create (once per document): read the sentence segmentation made by asr_sentences
 (--name, e.g. canary_asr).
 
 Add (once per system): read the output of this script and add one more system (--add), split into the
-existing sentences by one of three methods (--align mwer | vecalign | time; see alignments.py).
+existing sentences by one of four methods (--align mwer | vecalign | time | lines; the first three are
+in alignments.py). "lines" is for a system that is already 1:1 with the existing sentences: line k of
+the --add file goes to sentence k of its document, with no re-alignment; the number of lines must equal
+the number of sentences, and empty lines are kept (an empty line gives an empty text).
 
 --add takes one file, or many: several files, a glob, or a directory. All of them are handled in this
 one process, so the LaBSE / SentencePiece models are loaded once -- the point with a few hundred
@@ -19,7 +22,9 @@ DOC.<lan>.*); a file whose document is not in --input is an error, and documents
 
 --add accepts Canary-style JSONL ("words" with "start"/"end" per line), word-per-line JSONL, a NeMo
 hypothesis JSON, or plain text (e.g. a gold transcript or reference; no timestamps, so not usable with
---align time).
+--align time). With --align lines, use plain text (one sentence per line) or JSONL with one
+{"text": ...} / {"segment": ...} / {"words": [...]} record per sentence; word-per-line JSONL and a
+NeMo hypothesis JSON have no sentence lines and cannot be used.
 
 Output: one sentence per line:
   {"document", "dataset", "src_language",
@@ -31,10 +36,10 @@ Output: one sentence per line:
    "alignment": {"canary_mt_cs": "vecalign 1:1", ...},  # how each added system was aligned here
    "words": {"canary_asr": [{"word", "start", "end"}, ...], ...}}   # only with --with-words
 
-Alignment labels: "mwer", "time", or "vecalign a:b" where a existing sentences were aligned to b added
-sentences; "split" means the added sentence(s) of an n:m unit were divided among the n existing
-sentences (existing sentences are never merged); "+ins" means unaligned added sentences were attached
-to this sentence; "1:0" means nothing was aligned to this sentence.
+Alignment labels: "mwer", "time", "lines 1:1", or "vecalign a:b" where a existing sentences were
+aligned to b added sentences; "split" means the added sentence(s) of an n:m unit were divided among the
+n existing sentences (existing sentences are never merged); "+ins" means unaligned added sentences were
+attached to this sentence; "1:0" means nothing was aligned to this sentence.
 
 Usage:
     # create
@@ -44,6 +49,9 @@ Usage:
     cat aligned/*.jsonl > aligned/all.jsonl
     python add_and_align_sentences.py --input aligned/all.jsonl --output aligned/all+mt.jsonl \\
         --add mt/cs/ --name canary_mt_cs --lan cs --align vecalign
+    # add a translation that is already 1:1 with the sentences (one line per sentence)
+    python add_and_align_sentences.py --input aligned/all.jsonl --output aligned/all+mt.jsonl \\
+        --add mt/cs/ --name sent_mt_cs --lan cs --align lines --continue-on-error
     # add a gold transcript or a reference (same language as the system it is aligned to)
     python add_and_align_sentences.py --input aligned/DOC.jsonl \\
         --add gold/DOC.txt --name gold_transcript --lan en --is-human --align mwer
@@ -74,9 +82,12 @@ def read_jsonl(path):
         return [json.loads(l) for l in f if l.strip()]
 
 
-def load_add(path):
+def load_add(path, keep_empty=False):
     """Return (words, segments): words = [{"word", "start"?, "end"?}], segments = list of word-index
-    lists (the file's own lines/segments). Plain text gives words without timestamps."""
+    lists (the file's own lines/segments). Plain text gives words without timestamps.
+
+    keep_empty: keep lines/records without words as empty segments (needed for --align lines, where
+    segment k must stay sentence k). Otherwise they are dropped."""
     text = Path(path).read_text(encoding="utf-8")
     records = None
     try:
@@ -95,22 +106,36 @@ def load_add(path):
             if str(w.get("word", "")).strip():
                 idx.append(len(words))
                 words.append(w)
-        if idx:
+        if idx or keep_empty:
             segments.append(idx)
 
     if records is None or not all(isinstance(r, dict) for r in records):  # plain text
-        for line in text.splitlines():
+        lines = text.splitlines()
+        if keep_empty:
+            # a trailing newline is not an extra empty sentence, but inner empty lines are
+            while lines and not lines[-1].strip():
+                lines.pop()
+        for line in lines:
             add([{"word": t} for t in line.split()])
         return words, segments
     for r in records:
         if "words" in r:
             add(r["words"])
         elif isinstance(r.get("timestamp"), dict) and "word" in r["timestamp"]:
+            if keep_empty:
+                raise ValueError(f"{path}: a NeMo hypothesis JSON has no sentence lines; "
+                                 f"--align lines needs one line per sentence")
             add(r["timestamp"]["word"])
         elif "word" in r:
+            if keep_empty:
+                raise ValueError(f"{path}: word-per-line JSONL has no sentence lines; "
+                                 f"--align lines needs one line per sentence")
             add([r])
         elif "segment" in r or "text" in r:
             add([{"word": t} for t in str(r.get("segment", r.get("text", ""))).split()])
+        elif keep_empty:
+            raise ValueError(f"{path}: a record without \"text\", \"segment\" or \"words\"; "
+                             f"--align lines cannot keep the lines in step")
     return words, segments
 
 
@@ -275,29 +300,42 @@ def match_add(adds, groups, args):
 
 # ---------------------------------------------------------------- add a system
 
+def align_lines(segments, recs):
+    """--align lines: segment k -> sentence k. The counts must match."""
+    if len(segments) != len(recs):
+        raise ValueError(f"--align lines: {len(segments)} line(s) in the added file, "
+                         f"{len(recs)} sentence(s) in the document")
+    sent_of = [k for k, seg in enumerate(segments) for _ in seg]
+    labels = ["lines 1:1"] * len(recs)
+    return sent_of, labels
+
+
 def add_system(recs, words, segments, args):
     info = recs[0]["systems_info"]
     if args.name in info and not args.overwrite:
         sys.exit(f"system {args.name!r} is already in the input (use --overwrite)")
     if args.lan is None:
         sys.exit("--lan is required with --add")
-    if not words:
-        sys.exit("--add: no words in the file")
 
-    if args.align == "mwer":
-        ref = args.align_to or next((s for s, v in info.items()
-                                     if v.get("lan") == args.lan and s != args.name), None)
-        if ref is None:
-            sys.exit(f"--align mwer needs a system in the same language ({args.lan}) to align to; "
-                     f"give --align-to (systems: {', '.join(info)})")
-        if info.get(ref, {}).get("lan") not in (None, args.lan):
-            print(f"WARNING: aligning {args.lan} to {ref!r} ({info[ref]['lan']}) with mwer; "
-                  f"use vecalign for different languages", file=sys.stderr)
+    if args.align == "lines":
+        sent_of, labels = align_lines(segments, recs)
     else:
-        ref = args.align_to or recs[0]["segmented_by"]
-    if args.align != "time":
-        print(f"{args.align}: aligning to {ref!r}", file=sys.stderr)
-    sent_of, labels = align(args.align, words, segments, recs, ref, Options.from_args(args))
+        if not words:
+            raise ValueError("--add: no words in the file")
+        if args.align == "mwer":
+            ref = args.align_to or next((s for s, v in info.items()
+                                         if v.get("lan") == args.lan and s != args.name), None)
+            if ref is None:
+                sys.exit(f"--align mwer needs a system in the same language ({args.lan}) to align to; "
+                         f"give --align-to (systems: {', '.join(info)})")
+            if info.get(ref, {}).get("lan") not in (None, args.lan):
+                print(f"WARNING: aligning {args.lan} to {ref!r} ({info[ref]['lan']}) with mwer; "
+                      f"use vecalign for different languages", file=sys.stderr)
+        else:
+            ref = args.align_to or recs[0]["segmented_by"]
+        if args.align != "time":
+            print(f"{args.align}: aligning to {ref!r}", file=sys.stderr)
+        sent_of, labels = align(args.align, words, segments, recs, ref, Options.from_args(args))
 
     per_sent = [[] for _ in recs]
     for w, k in zip(words, sent_of):
@@ -319,7 +357,7 @@ def add_system(recs, words, segments, args):
 def add_to_document(recs, add_path, args):
     """Align one --add file into the records of one document (updated in place)."""
     print(f"adding {add_path}", file=sys.stderr)
-    words, segments = load_add(add_path)
+    words, segments = load_add(add_path, keep_empty=(args.align == "lines"))
     if args.align == "time" and not has_times(words):
         raise ValueError("--align time needs word timestamps; use --align mwer or vecalign")
     add_system(recs, words, segments, args)
@@ -361,17 +399,19 @@ def main():
                                          "(default: .<lan>.jsonl, .<lan>.txt, .jsonl, .txt)")
     ap.add_argument("--continue-on-error", action="store_true",
                     help="with several --add files: report a failing document and go on")
-    ap.add_argument("--align", choices=["mwer", "vecalign", "time"], default="vecalign",
+    ap.add_argument("--align", choices=["mwer", "vecalign", "time", "lines"], default="vecalign",
                     help="mwer: same language as --align-to; vecalign: a translation; time: word "
-                         "timestamps only (default: vecalign)")
+                         "timestamps only; lines: already 1:1, line k -> sentence k, no re-alignment "
+                         "(default: vecalign)")
     ap.add_argument("--align-to", help="system to align to (mwer: a system in the same language, default "
-                                       "the first one with --lan; vecalign: default the segmentation system)")
+                                       "the first one with --lan; vecalign: default the segmentation "
+                                       "system; ignored by time and lines)")
     ap.add_argument("--joiner", default=" ", help="string between words (default: space; '' for zh/ja)")
     ap.add_argument("--overwrite", action="store_true", help="replace a system that is already present")
     ap.add_argument("--with-words", action="store_true",
                     help="store words (with timestamps if any) per system")
     # alignment tuning; defaults are those of Vecalign and mweralign (see alignments.py)
-    g = ap.add_argument_group("alignment tuning")
+    g = ap.add_argument_group("alignment tuning (not used by --align lines)")
     g.add_argument("--mwer-tokenizer", default="spm32k",
                    help="mweralign tokenizer: spm32k (default), spm64k, spm128k, spm256k, a "
                         "SentencePiece .model path, 'cj', or 'none'")
