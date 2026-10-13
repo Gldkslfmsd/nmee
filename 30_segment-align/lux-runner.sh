@@ -51,10 +51,6 @@ for tgt in $canary_target_langs ; do
         --add $add
 done
 
-#if [ $dataset == "earnings-25" ]; then
-#    python 35_add_earnings_gold.py --input $segmented_systems_merged \
-#        --output $segmented_systems_merged --gold $gold_json \
-#        --align-to luxasr
-#else
-#    echo "No gold data for dataset $dataset, skipping."
-#fi
+python 35_add_earnings_gold.py --input $segmented_systems_merged \
+    --output $segmented_systems_merged --gold $gold_json \
+    --align-to luxasr --lan lb
