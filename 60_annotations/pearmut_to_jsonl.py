@@ -29,6 +29,12 @@ Output: the input records of the segments annotated in pearmut, plus
   offsets in the pearmut text of that system (end exclusive) with the marked text. [] if gold_annotations
   is false, null if it is null. The spans belong to the system output, so all targets of the same system in
   a segment have the same list. Used by eval-recall.py to count the characters and words in harmful spans.
+  "gold_by_annotator": {"<user>": {"gold_annotations": [...], "gold_annotation_details": [...],
+                                   "gold_spans": [...]}, ...}
+    -- the same three lists (one entry per item of "targets") for every annotator separately, so that the
+    agreement between annotators can be computed (eval-iaa.py). The three lists above combine the
+    annotators (see below). An annotator who saw none of the targets of the record is left out; in an
+    output with {user} in the name there is only that annotator.
 A system shown in pearmut that has no target in the record (e.g. the ASR, when the LLM flagged only
 the translation) is added to "targets" as a target without a span:
     {"tgt_lan": ..., "system": ..., "text": ..., "span": null, "span_start": null, "span_end": null}
@@ -283,6 +289,17 @@ def main():
                 out_rec["gold_annotation_details"] = detail_values
                 out_rec["gold_spans"] = [human_spans(i, k, users_of) if v else None if v is None else []
                                          for k, v in enumerate(values)]
+                by_annotator = {}
+                for u in users_of:
+                    own = [per_user.get(u) for per_user in labels[i]]
+                    if all(v is None for v in own):
+                        continue  # this annotator saw none of the targets
+                    by_annotator[u] = {
+                        "gold_annotations": own,
+                        "gold_annotation_details": [per_user.get(u) for per_user in details[i]],
+                        "gold_spans": [human_spans(i, k, [u]) if v else None if v is None else []
+                                       for k, v in enumerate(own)]}
+                out_rec["gold_by_annotator"] = by_annotator
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
                 n += 1
                 counts.update("null" if v is None else str(v).lower() for v in values)
