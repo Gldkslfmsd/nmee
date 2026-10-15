@@ -6,10 +6,17 @@ Sections:
   * ASR           : NeMo streaming pipeline (nvidia/parakeet-unified-en-0.6b) with latency presets
   * LLM MT        : NeMo's vLLM LLMTranslator driven incrementally (NeMo@IWSLT 2026 cascade)
 
-JSONL format (same shape as SimulStreaming's default stdout), used for ASR and MT output:
-    {"start": 0.0, "end": 1.12, "text": " And so,", "words": [{"start": .., "end": .., "text": " And"}, ...],
-     "is_final": false, "emission_time": 2.31}
-    {"is_final": true, "emission_time": 5.02}        # end of utterance (EoU), no text
+JSONL format, used for ASR and MT output (SimulStreaming-style, with an unconfirmed tail): one line per
+processing step of the simulated system:
+    {"emission_time": 8.84, "start": 4.32, "end": 5.76, "text": " And so,",
+     "unconfirmed_text": " we will", "is_final": false}
+  text              words confirmed in this step (an increment: concatenating "text" gives the output);
+                    append-only, never changed later
+  unconfirmed_text  the rest of the current hypothesis of the open segment; may change in later steps
+  start, end        the source audio that arrived since the previous step, in seconds (from the chunk grid;
+                    not the time span of "text": there are no per-word times)
+  emission_time     simulated time at which the line is available
+  is_final          end of the segment (EoU): "text" holds the remainder, buffers are reset
 """
 import contextlib
 import json
@@ -44,26 +51,12 @@ def log(*a):
     print(*a, file=sys.stderr, flush=True)
 
 
-def cuda_sync():
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-    except Exception:  # noqa: BLE001
-        pass
-
-
 class Clock:
-    """Simulated wall clock.
+    """Simulated clock. Only computation-unaware simulation is implemented: emission times are the
+    reference times given by the caller (the audio time of the ASR step, or the upstream emission time);
+    compute time is not added. (A computation-aware mode needs overlapping steps, not implemented yet.)"""
 
-    Computation-aware (default): `now` advances by the measured compute time of every step and can
-    never run ahead of the data it processes (wait_until). Computation-unaware: emission times are
-    just the reference times given by the caller (audio time, or the upstream emission time).
-    """
-
-    def __init__(self, comp_unaware=False):
-        self.comp_unaware = comp_unaware
+    def __init__(self):
         self.now = 0.0
 
     def wait_until(self, t):
@@ -71,19 +64,13 @@ class Clock:
 
     @contextlib.contextmanager
     def compute(self):
-        cuda_sync()
-        t0 = time.perf_counter()
-        try:
-            yield
-        finally:
-            cuda_sync()
-            self.now += time.perf_counter() - t0
+        yield
 
     def emission(self, ref):
-        return ref if self.comp_unaware else self.now
+        return ref
 
     def end_emission(self, duration):
-        return duration if self.comp_unaware else max(self.now, duration)
+        return duration
 
 
 def read_jsonl(path):
@@ -230,104 +217,96 @@ def common_prefix_len(a, b):
 
 
 class JsonlWriter:
-    """Writes SimulStreaming-style lines; every method also returns the dict it wrote."""
+    """Writes one line per step; every method also returns the dict it wrote."""
 
     def __init__(self, fh):
         self.fh = fh
 
-    def _write(self, obj):
+    @staticmethod
+    def _join(words):
+        return "".join(" " + w for w in words)
+
+    def step(self, new_words, unconfirmed_words, start, end, emission_time, is_final=False):
+        obj = {
+            "emission_time": round(emission_time, 4),
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "text": self._join(new_words),
+            "unconfirmed_text": self._join(unconfirmed_words),
+            "is_final": is_final,
+        }
         self.fh.write(json.dumps(obj, ensure_ascii=False) + "\n")
         self.fh.flush()
         return obj
 
-    def text(self, words, start, end, emission_time):
-        n = len(words)
-        step_words = []
-        for i, w in enumerate(words):
-            t = round(start + (end - start) * (i + 1) / n, 3)
-            step_words.append({"start": t, "end": t, "text": " " + w})
-        return self._write(
-            {
-                "start": round(start, 3),
-                "end": round(end, 3),
-                "text": "".join(" " + w for w in words),
-                "words": step_words,
-                "is_final": False,
-                "emission_time": round(emission_time, 4),
-            }
-        )
-
-    def final(self, emission_time):
-        return self._write({"is_final": True, "emission_time": round(emission_time, 4)})
-
 
 class Committer:
-    """Turns unstable (partial, final) ASR hypotheses into append-only JSONL updates.
+    """Turns unstable (partial, final) ASR hypotheses into the JSONL lines described above.
 
-    LocalAgreement-2: a word is committed once two consecutive partial hypotheses agree on it.
-    At EoU (non-empty final text) the rest of the final text is committed and the segment closed.
-    NeMo gives no timestamps for partial hypotheses, so "start"/"end" are approximations: "end" is
-    the audio time at which the words were committed (minus one chunk for agreement commits).
+    LocalAgreement-2: a word is confirmed once two consecutive partial hypotheses agree on it; the rest
+    of the current hypothesis is the unconfirmed tail. At EoU (non-empty final text) the rest of the final
+    text is confirmed and the segment closed. A line is written in every step that has a hypothesis
+    (also when nothing changed: a consumer such as the LLM runs one step per ASR step).
     """
 
     def __init__(self, writer):
         self.writer = writer
-        self.committed = []  # words committed since the last EoU
-        self.prev = []       # previous partial hypothesis (words)
-        self.last_end = 0.0  # audio time of the last emitted text
-        self.revisions = 0   # committed text later contradicted by the EoU text
+        self.committed = []   # words confirmed since the last EoU
+        self.prev = []        # previous partial hypothesis (words)
+        self.had_tail = False  # the previous line had an unconfirmed tail
+        self.revisions = 0    # confirmed words later contradicted by the EoU text
+        self.last_end = 0.0   # audio time at the end of the last line
 
-    def _emit(self, words, end, emission_time):
-        start = self.last_end
-        end = max(end, start)
-        ev = self.writer.text(words, start, end, emission_time)
-        self.last_end = end
-        return ev
+    def _reset(self):
+        self.committed, self.prev, self.had_tail = [], [], False
 
-    def step(self, final_text, partial_text, audio_t, prev_audio_t, emission_time):
+    def step(self, final_text, partial_text, prev_audio_t, audio_t, emission_time):
         """Returns the list of JSONL events (dicts) written by this step."""
-        events = []
         final = final_text.split() if final_text else []
         hyp = partial_text.split() if partial_text else []
 
-        if final:  # end of utterance: flush the rest, close the segment
+        if final:  # end of utterance: confirm the rest, close the segment
             if final[: len(self.committed)] != self.committed:
                 self.revisions += 1
-            new = final[len(self.committed):]
-            if new:
-                events.append(self._emit(new, audio_t, emission_time))
-            events.append(self.writer.final(emission_time))
-            self.committed, self.prev = [], []
-        else:
-            lcp = common_prefix_len(self.prev, hyp)
-            if lcp > len(self.committed):
-                events.append(self._emit(hyp[len(self.committed):lcp], prev_audio_t, emission_time))
-                self.committed = hyp[:lcp]
-            self.prev = hyp
-        return events
+            ev = self.writer.step(final[len(self.committed):], [], prev_audio_t, audio_t, emission_time, True)
+            self.last_end = audio_t
+            self._reset()
+            return [ev]
+
+        new = []
+        lcp = common_prefix_len(self.prev, hyp)
+        if lcp > len(self.committed):
+            new = hyp[len(self.committed):lcp]
+            self.committed = hyp[:lcp]
+        tail = hyp[len(self.committed):]
+        self.prev = hyp
+        if new or tail or self.had_tail:
+            self.had_tail = bool(tail)
+            self.last_end = audio_t
+            return [self.writer.step(new, tail, prev_audio_t, audio_t, emission_time)]
+        return []
 
     def flush(self, duration, emission_time):
-        """End of audio: commit whatever is pending and close an open segment."""
-        events = []
+        """End of audio: confirm whatever is pending and close an open segment."""
         if self.prev or self.committed:
-            if len(self.prev) > len(self.committed):
-                events.append(self._emit(self.prev[len(self.committed):], duration, emission_time))
-            events.append(self.writer.final(emission_time))
-            self.committed, self.prev = [], []
-        return events
+            ev = self.writer.step(self.prev[len(self.committed):], [], self.last_end, duration, emission_time, True)
+            self._reset()
+            return [ev]
+        return []
 
 
 # --------------------------------------------------------------------------- ASR
 
 
+def warn_comp_unaware():
+    log("WARNING: computation-UNAWARE simulation: emission_time ignores the compute time of ASR and LLM "
+        "(computation-aware mode is not implemented).")
+
+
 def add_common_args(ap):
-    ap.add_argument(
-        "--comp-unaware",
-        action="store_true",
-        help="computation-unaware simulation: emission_time ignores compute time. "
-        "Default: computation-aware simulated clock.",
-    )
-    ap.add_argument("--no-warmup", action="store_true", help="skip the warm-up pass (computation-aware mode)")
+    ap.add_argument("--comp-unaware", action="store_true",
+                    help="no effect: computation-unaware simulation is the only mode implemented (accepted so "
+                    "that older commands still work)")
 
 
 def add_asr_args(ap, with_src_lang=True):
@@ -440,20 +419,6 @@ def audio_duration(path):
         return float(librosa.get_duration(path=path))
 
 
-def warmup_asr(pipeline, opts):
-    """Run ~3 s of noise through the pipeline so CUDA init is not counted in latency."""
-    import numpy as np
-    import soundfile as sf
-
-    try:
-        with tempfile.TemporaryDirectory() as d:
-            p = os.path.join(d, "warmup.wav")
-            sf.write(p, (np.random.randn(16000 * 3) * 0.01).astype("float32"), 16000)
-            pipeline.run([p], options=[opts])
-    except Exception as e:  # noqa: BLE001
-        log(f"WARNING: ASR warm-up failed ({e!r}); continuing without it.")
-
-
 @dataclass
 class AsrStep:
     audio_t: float         # audio seconds received so far
@@ -532,9 +497,9 @@ def add_llm_args(ap, default_gpu_mem):
     g.add_argument("--waitk", type=int, default=-1,
                    help="max lag in words between transcript and translation; -1 = longest common prefix "
                    "only (default, as in the paper)")
-    g.add_argument("--context-words", type=int, default=100,
-                   help="finished segments are given to the LLM as context (source and target side) until "
-                   "about this many source words are reached (default: %(default)s; my choice, not from the paper)")
+    g.add_argument("--context-segments", type=int, default=1,
+                   help="how many finished segments (source and target side) are given to the LLM as context "
+                   "(default: %(default)s = only the last one, as NeMo's streaming pipeline does; 0 = none)")
 
 
 def resolve_llm_args(args):
@@ -618,13 +583,6 @@ def build_llm(args):
     )
 
 
-def warmup_llm(llm, src_lang, tgt_lang):
-    try:
-        llm.translate(["Hello, how are you?"], [""], [src_lang], [tgt_lang], [""], [""])
-    except Exception as e:  # noqa: BLE001
-        log(f"WARNING: LLM warm-up failed ({e!r}); continuing without it.")
-
-
 class StreamingTranslator:
     """Incremental LLM translation of a streaming transcript, following NeMo@IWSLT 2026.
 
@@ -632,38 +590,33 @@ class StreamingTranslator:
     already fixed translation prefix forced (pre-filled in the assistant turn) and the finished
     segments as context. The next prefix is NeMo's own rule (LLMTranslator.get_prefixes): the longest
     common prefix of two consecutive translations, cut back to a word boundary (and the waitk rule if
-    --waitk > 0). Only that fixed prefix is written, so the output is append-only. At EoU the whole
-    segment is translated, the rest is written, and prefix and contexts are updated.
+    --waitk > 0). That fixed prefix is the confirmed "text" of the output (append-only); the rest of the
+    current translation is "unconfirmed_text". At EoU the whole segment is translated, the rest is
+    written, and prefix and contexts are updated.
 
-    Methods take `clock` (a Clock) so that LLM compute time is simulated, `audio_t` (source audio
-    time, written as "end") and `ref` (reference time for emission_time in computation-unaware mode).
+    Methods take `clock` (a Clock) so that LLM compute time is simulated, `start`/`end` (the source audio
+    interval of the step, copied to the output) and `ref` (reference time for emission_time in computation-unaware mode).
     """
 
-    def __init__(self, llm, src_lang, tgt_lang, writer, context_words=100):
+    def __init__(self, llm, src_lang, tgt_lang, writer, context_segments=1):
         self.llm = llm
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.writer = writer
-        self.context_words = context_words
+        self.context_segments = context_segments
         self.segments = []           # finished (source, translation) pairs, newest last
         self.prefix = ""             # fixed translation prefix of the open segment
         self.prev_translation = ""
         self.committed = []          # words already written for the open segment
         self.last_src = ""           # source text of the last LLM call (open segment)
         self.last_translation = ""
-        self.last_end = 0.0
+        self.had_tail = False        # the previous line had an unconfirmed tail
         self.revisions = 0           # written words later contradicted by the final translation
         self.llm_calls = 0
 
     def _contexts(self):
-        src, tgt, n = [], [], 0
-        for s, t in reversed(self.segments):
-            src.append(s)
-            tgt.append(t)
-            n += len(s.split())
-            if n >= self.context_words:
-                break
-        return " ".join(reversed(src)), " ".join(reversed(tgt))
+        last = self.segments[len(self.segments) - self.context_segments:] if self.context_segments > 0 else []
+        return " ".join(x for x, _ in last), " ".join(y for _, y in last)
 
     def _translate(self, src_text):
         if src_text == self.last_src and self.last_translation:
@@ -674,29 +627,32 @@ class StreamingTranslator:
             [src_text], [self.prefix], [self.src_lang], [self.tgt_lang], [src_ctx], [tgt_ctx]
         )[0]
 
-    def _emit(self, words, audio_t, emission_time):
-        start = self.last_end
-        end = max(audio_t, start)
-        self.writer.text(words, start, end, emission_time)
-        self.last_end = end
-
-    def update(self, src_text, audio_t, clock, ref):
-        """New (possibly unstable) source text of the open segment."""
+    def update(self, src_text, start, end, clock, ref):
+        """New (possibly unstable) source text of the open segment: one LLM step."""
         src_text = " ".join(src_text.split())
-        if not src_text or src_text == self.last_src:
+        if not src_text:
             return
+        # An unchanged source is not skipped: NeMo runs one LLM step per ASR step, and the next step on
+        # the same source gives the same translation, so the common prefix with the previous one is the
+        # whole translation and the fixed prefix advances (_translate reuses the translation, no LLM call).
         with clock.compute():
             translation = self._translate(src_text)
             new_prefix = self.llm.get_prefixes([src_text], [translation], [self.prev_translation])[0]
         self.last_src, self.last_translation = src_text, translation
         self.prev_translation = translation
         words = new_prefix.split()
+        new = []
         if len(words) > len(self.committed) and words[: len(self.committed)] == self.committed:
-            self._emit(words[len(self.committed):], audio_t, clock.emission(ref))
+            new = words[len(self.committed):]
             self.committed = words
+        t_words = translation.split()
+        tail = t_words[len(self.committed):] if t_words[: len(self.committed)] == self.committed else []
+        if new or tail or self.had_tail:
+            self.writer.step(new, tail, start, end, clock.emission(ref))
+            self.had_tail = bool(tail)
         self.prefix = new_prefix
 
-    def finalize(self, src_text, audio_t, clock, ref):
+    def finalize(self, src_text, start, end, clock, ref):
         """The open segment is complete (EoU): translate it fully, write the rest, reset."""
         src_text = " ".join(src_text.split())
         if not src_text:
@@ -706,38 +662,51 @@ class StreamingTranslator:
         words = translation.split()
         if words[: len(self.committed)] != self.committed:
             self.revisions += 1
-        new = words[len(self.committed):]
-        if new:
-            self._emit(new, audio_t, clock.emission(ref))
-        self.writer.final(clock.emission(ref))
+        self.writer.step(words[len(self.committed):], [], start, end, clock.emission(ref), True)
         self.segments.append((src_text, translation.strip()))
         self.segments = self.segments[-50:]
         self.prefix = self.prev_translation = self.last_src = self.last_translation = ""
         self.committed = []
+        self.had_tail = False
 
-    def finish(self, audio_t, clock, ref):
+    def finish(self, start, end, clock, ref):
         """End of input: close a segment that never got an EoU."""
         if self.last_src:
-            self.finalize(self.last_src, audio_t, clock, ref)
+            self.finalize(self.last_src, start, end, clock, ref)
 
 
 class AsrEventFeeder:
-    """Feeds ASR JSONL events (as written by nemo_streaming_parakeet.py) to a StreamingTranslator.
+    """Feeds ASR JSONL lines (as written by nemo_streaming_parakeet.py) to a StreamingTranslator,
+    one LLM step per line.
 
-    The translator sees only the words the ASR has committed; a text line extends the open segment,
-    an {"is_final": true} line closes it.
+    With use_unconfirmed (default) the source of a step is the confirmed text of the open segment plus
+    "unconfirmed_text", i.e. the current ASR hypothesis, as in NeMo; otherwise only the confirmed text.
+    An is_final line closes the segment: its final transcript is the confirmed text plus that line's "text".
+    (Files from the older format, without unconfirmed_text and with a separate is_final line, also work.)
     """
 
-    def __init__(self, translator):
+    def __init__(self, translator, use_unconfirmed=True):
         self.translator = translator
-        self.words = []
+        self.use_unconfirmed = use_unconfirmed
+        self.words = []       # confirmed words of the open segment
+        self.last_start = 0.0
         self.last_end = 0.0
 
     def feed(self, event, clock, ref):
+        self.last_start = float(event.get("start", self.last_end))
+        self.last_end = float(event.get("end", self.last_end))
+        new = (event.get("text") or "").split()
         if event.get("is_final"):
-            self.translator.finalize(" ".join(self.words), self.last_end, clock, ref)
+            self.translator.finalize(" ".join(self.words + new), self.last_start, self.last_end, clock, ref)
             self.words = []
-        elif event.get("text"):
-            self.last_end = float(event.get("end", self.last_end))
-            self.words += event["text"].split()
-            self.translator.update(" ".join(self.words), self.last_end, clock, ref)
+            return
+        self.words += new
+        tail = (event.get("unconfirmed_text") or "").split() if self.use_unconfirmed else []
+        if self.words or tail:
+            self.translator.update(" ".join(self.words + tail), self.last_start, self.last_end, clock, ref)
+
+
+def add_mt_input_arg(ap):
+    ap.add_argument("--mt-input", choices=["partial", "committed"], default="partial",
+                    help="what the LLM translates: the current ASR hypothesis, i.e. confirmed plus unconfirmed "
+                    "text (default, as in NeMo and the paper), or only the confirmed ASR text")
