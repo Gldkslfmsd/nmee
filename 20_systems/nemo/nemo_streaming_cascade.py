@@ -20,6 +20,9 @@ writes, and the translation is what nemo_streaming_llm.py makes from it: this is
 
 ASR and vLLM share the GPU (the vLLM engine runs in this process), hence --nmt-gpu-mem 0.5 by default;
 for large LLMs raise it (Qwen3.5-27B: about 0.8).
+
+WARNING: computation-UNAWARE simulation only. emission_time is the audio time of the ASR step and ignores
+the compute time of ASR and LLM (computation-aware simulation is not implemented).
 """
 import argparse
 import contextlib
@@ -27,7 +30,7 @@ import os
 import sys
 
 from utils import (
-    AsrEventFeeder, Clock, add_mt_input_arg, Committer, JsonlWriter, StreamingTranslator, add_asr_args, add_common_args,
+    AsrEventFeeder, Clock, add_mt_input_arg, Committer, JsonlWriter, StreamingTranslator, add_asr_args,
     add_io_args, add_llm_args, asr_request_options, asr_steps, atomic_out, audio_duration,
     build_asr_pipeline, build_llm, check_inputs, claim, log, resolve_asr_args, resolve_llm_args,
     silence_resource_tracker, warn_comp_unaware,
@@ -41,7 +44,6 @@ def main():
     add_mt_input_arg(ap)
     add_asr_args(ap, with_src_lang=False)
     add_llm_args(ap, default_gpu_mem=0.5)
-    add_common_args(ap)
     args = ap.parse_args()
     warn_comp_unaware()
     check_inputs(args)

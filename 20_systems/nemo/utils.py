@@ -17,6 +17,9 @@ processing step of the simulated system:
                     not the time span of "text": there are no per-word times)
   emission_time     simulated time at which the line is available
   is_final          end of the segment (EoU): "text" holds the remainder, buffers are reset
+
+Only computation-UNAWARE simulation is implemented: emission_time is the audio time of the ASR step (or the
+upstream emission time) and ignores the compute time of ASR and LLM. A warning is printed at startup.
 """
 import contextlib
 import json
@@ -303,12 +306,6 @@ def warn_comp_unaware():
         "(computation-aware mode is not implemented).")
 
 
-def add_common_args(ap):
-    ap.add_argument("--comp-unaware", action="store_true",
-                    help="no effect: computation-unaware simulation is the only mode implemented (accepted so "
-                    "that older commands still work)")
-
-
 def add_asr_args(ap, with_src_lang=True):
     g = ap.add_argument_group("ASR (NeMo streaming pipeline)")
     g.add_argument("--model", default="nvidia/parakeet-unified-en-0.6b")
@@ -485,11 +482,6 @@ def add_llm_args(ap, default_gpu_mem):
                    help="extra argument of vLLM's LLM(...), repeatable; VALUE is parsed as JSON if possible, "
                    "e.g. --llm-param 'limit_mm_per_prompt={\"image\":0,\"video\":0}' (skips the vision part of "
                    "Qwen3.5) or --llm-param enforce_eager=true")
-    g.add_argument("--vllm-subprocess", action="store_true",
-                   help="run vLLM's engine in a subprocess (vLLM's default; fails to init CUDA in some "
-                   "environments with NeMo installed). Default here: in-process engine.")
-    g.add_argument("--vllm-plugins", action="store_true",
-                   help="load third-party vLLM plugins (NeMo registers one); off by default")
     g.add_argument("--max-num-seqs", type=int, default=8,
                    help="vLLM max_num_seqs (default: %(default)s). Only one request runs at a time here; vLLM's "
                    "default of 1024 makes Qwen3.5 fail with 'max_num_seqs exceeds available Mamba cache blocks' "
@@ -514,13 +506,10 @@ def resolve_llm_args(args):
 
 def build_llm(args):
     """NeMo's vLLM-based LLMTranslator (nemo.collections.asr.inference.nmt.llm_translator)."""
-    # vLLM's engine subprocess can fail with "CUDA driver initialization failed" when NeMo's
-    # `multiprocess` package is installed, so the engine runs in-process by default. NeMo's own vLLM
-    # plugin is not needed here and can fail to import. Set the variables yourself to override.
-    if not getattr(args, "vllm_subprocess", False):
-        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    if not getattr(args, "vllm_plugins", False):
-        os.environ.setdefault("VLLM_PLUGINS", "")
+    # vLLM's engine runs in this process (its subprocess failed with "CUDA driver initialization failed" on
+    # our cluster nodes), and no third-party vLLM plugins are loaded (NeMo registers one, not needed here).
+    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    os.environ.setdefault("VLLM_PLUGINS", "")
     try:
         from nemo.collections.asr.inference.nmt.llm_translator import SUPPORTED_TRANSLATION_MODELS, LLMTranslator
     except ModuleNotFoundError as e:

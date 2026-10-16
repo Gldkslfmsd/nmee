@@ -24,12 +24,15 @@ Output: one line per ASR step (a step = one chunk of audio) that has a hypothesi
 Steps without any change are written too, because the LLM runs one step per ASR step. There are no
 per-word times (NeMo gives none for partial hypotheses): start/end are the chunk, not the span of the text.
 Feed the output to nemo_streaming_llm.py for translation.
+
+WARNING: computation-UNAWARE simulation only. emission_time is the audio time of the ASR step and ignores
+the compute time of ASR and LLM (computation-aware simulation is not implemented).
 """
 import argparse
 import sys
 
 from utils import (
-    Clock, Committer, JsonlWriter, add_asr_args, add_common_args, add_io_args, asr_request_options,
+    Clock, Committer, JsonlWriter, add_asr_args, add_io_args, asr_request_options,
     asr_steps, atomic_out, audio_duration, build_asr_pipeline, check_inputs, claim, log, resolve_asr_args,
     resolve_lang, silence_resource_tracker, warn_comp_unaware,
 )
@@ -40,7 +43,6 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     add_io_args(ap, "input audio file(s) (anything soundfile/librosa reads; resampled to 16 kHz mono)")
     add_asr_args(ap)
-    add_common_args(ap)
     args = ap.parse_args()
     warn_comp_unaware()
     check_inputs(args)

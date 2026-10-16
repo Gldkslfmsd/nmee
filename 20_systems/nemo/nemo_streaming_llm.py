@@ -21,13 +21,16 @@ the already fixed translation as forced prefix and the last finished segment as 
 its "unconfirmed_text". At each is_final line the segment is translated completely. Output emission_time
 equals the input emission_time (computation-unaware simulation, the only mode implemented). This reproduces the cascade
 of nemo_streaming_cascade.py, which is the same code run in one process.
+
+WARNING: computation-UNAWARE simulation only. emission_time is the audio time of the ASR step and ignores
+the compute time of ASR and LLM (computation-aware simulation is not implemented).
 """
 import argparse
 import sys
 from pathlib import Path
 
 from utils import (
-    AsrEventFeeder, Clock, add_mt_input_arg, JsonlWriter, StreamingTranslator, add_common_args, add_io_args, add_llm_args,
+    AsrEventFeeder, Clock, add_mt_input_arg, JsonlWriter, StreamingTranslator, add_io_args, add_llm_args,
     atomic_out, build_llm, check_inputs, claim, log, read_jsonl, resolve_llm_args,
     silence_resource_tracker, warn_comp_unaware,
 )
@@ -44,7 +47,6 @@ def main():
     add_io_args(ap, "ASR JSONL file(s) from nemo_streaming_parakeet.py")
     add_llm_args(ap, default_gpu_mem=0.85)
     add_mt_input_arg(ap)
-    add_common_args(ap)
     args = ap.parse_args()
     warn_comp_unaware()
     check_inputs(args)
