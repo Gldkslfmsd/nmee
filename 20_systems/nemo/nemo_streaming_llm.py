@@ -30,6 +30,7 @@ import sys
 from pathlib import Path
 
 from utils import (
+    MAX_NEW_TOKENS,
     AsrEventFeeder, Clock, add_mt_input_arg, JsonlWriter, StreamingTranslator, add_io_args, add_llm_args,
     atomic_out, build_llm, check_inputs, claim, log, read_jsonl, resolve_llm_args,
     silence_resource_tracker, warn_comp_unaware,
@@ -68,7 +69,8 @@ def main():
                 clock = Clock()
                 last_ref = 0.0
                 with atomic_out(out) as fh:
-                    tr = StreamingTranslator(llm, args.src_name, name, JsonlWriter(fh), args.context_segments)
+                    tr = StreamingTranslator(llm, args.src_name, name, JsonlWriter(fh), args.context_segments,
+                                             max_prompt_tokens=args.max_model_len - MAX_NEW_TOKENS - 8)
                     feeder = AsrEventFeeder(tr, use_unconfirmed=args.mt_input == "partial")
                     for ev in read_jsonl(inp):
                         last_ref = float(ev.get("emission_time", last_ref))
@@ -76,6 +78,8 @@ def main():
                         feeder.feed(ev, clock, last_ref)
                     tr.finish(feeder.last_start, feeder.last_end, clock, last_ref)
             log(f"{out}: {tr.llm_calls} LLM calls"
+                + (f"; context dropped in {tr.trimmed} call(s)" if tr.trimmed else "")
+                + (f"; {tr.splits} over-long segment(s) split" if tr.splits else "")
                 + (f"; {tr.revisions} segment(s) where the final translation revised written words"
                    if tr.revisions else ""))
 

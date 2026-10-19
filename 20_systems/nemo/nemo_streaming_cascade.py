@@ -30,6 +30,7 @@ import os
 import sys
 
 from utils import (
+    MAX_NEW_TOKENS,
     AsrEventFeeder, Clock, add_mt_input_arg, Committer, JsonlWriter, StreamingTranslator, add_asr_args,
     add_io_args, add_llm_args, asr_request_options, asr_steps, atomic_out, audio_duration,
     build_asr_pipeline, build_llm, check_inputs, claim, log, resolve_asr_args, resolve_llm_args,
@@ -76,7 +77,8 @@ def main():
                         asr_fh = stack.enter_context(open(os.devnull, "w"))
                     asr_handled = True
                     asr = Committer(JsonlWriter(asr_fh))
-                    tr = StreamingTranslator(llm, args.src_name, name, JsonlWriter(mt_fh), args.context_segments)
+                    tr = StreamingTranslator(llm, args.src_name, name, JsonlWriter(mt_fh), args.context_segments,
+                                             max_prompt_tokens=args.max_model_len - MAX_NEW_TOKENS - 8)
                     feeder = AsrEventFeeder(tr, use_unconfirmed=partial_mode)
                     for st in asr_steps(pipeline, opts, str(inp), args.chunk, duration, clock):
                         for ev in asr.step(st.final_text, st.partial_text, st.prev_audio_t, st.audio_t,
@@ -87,6 +89,8 @@ def main():
                         feeder.feed(ev, clock, end_em)
                     tr.finish(feeder.last_start, duration, clock, end_em)
             log(f"{mt_out}: {tr.llm_calls} LLM calls, {duration:.1f}s of audio"
+                + (f"; context dropped in {tr.trimmed} call(s)" if tr.trimmed else "")
+                + (f"; {tr.splits} over-long segment(s) split" if tr.splits else "")
                 + (f"; ASR revised written words in {asr.revisions} segment(s)" if asr.revisions else "")
                 + (f"; {tr.revisions} MT segment(s) revised at EoU" if tr.revisions else ""))
 

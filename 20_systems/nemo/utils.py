@@ -45,6 +45,7 @@ LATENCY_PRESETS = {
 }
 
 DEFAULT_NMT_MODEL = "utter-project/EuroLLM-9B-Instruct"
+MAX_NEW_TOKENS = 100  # tokens generated per LLM call (NeMo's default sampling_params.max_tokens)
 
 
 # --------------------------------------------------------------------------- generic
@@ -510,6 +511,11 @@ def build_llm(args):
     # our cluster nodes), and no third-party vLLM plugins are loaded (NeMo registers one, not needed here).
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     os.environ.setdefault("VLLM_PLUGINS", "")
+    # vLLM/FlashInfer compile some kernels at startup with `ninja`; when the script is run as
+    # venv/bin/python without activating the venv, a ninja installed in the venv is not on PATH.
+    bindir = os.path.dirname(sys.executable)
+    if bindir not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = bindir + os.pathsep + os.environ.get("PATH", "")
     try:
         from nemo.collections.asr.inference.nmt.llm_translator import SUPPORTED_TRANSLATION_MODELS, LLMTranslator
     except ModuleNotFoundError as e:
@@ -558,7 +564,7 @@ def build_llm(args):
         except json.JSONDecodeError:
             pass
         llm_params[key] = value
-    sampling_params = {"max_tokens": 100, "temperature": 0.0, "top_p": 0.9, "seed": 42}
+    sampling_params = {"max_tokens": MAX_NEW_TOKENS, "temperature": 0.0, "top_p": 0.9, "seed": 42}
     return translator_cls(
         model_name=args.nmt_model,
         source_language=args.src_name,
@@ -583,43 +589,91 @@ class StreamingTranslator:
     current translation is "unconfirmed_text". At EoU the whole segment is translated, the rest is
     written, and prefix and contexts are updated.
 
-    Methods take `clock` (a Clock) so that LLM compute time is simulated, `start`/`end` (the source audio
-    interval of the step, copied to the output) and `ref` (reference time for emission_time in computation-unaware mode).
+    Prompt length (not handled by NeMo, whose vLLM call fails when the prompt exceeds max_model_len): with
+    max_prompt_tokens set, every prompt is kept within that many tokens. If the prompt with the context does
+    not fit, the context is left out completely for that call (no partial trimming). If the open segment
+    alone, without context, exceeds half of the budget, it is split: the
+    current text is translated completely, the rest of that translation is confirmed (without is_final;
+    the ASR segment goes on), it becomes the context, and the following updates translate only the source
+    words after the split.
+
+    Methods take `clock` (a Clock), `start`/`end` (the source audio interval of the step, copied to the
+    output) and `ref` (reference time for emission_time).
     """
 
-    def __init__(self, llm, src_lang, tgt_lang, writer, context_segments=1):
+    def __init__(self, llm, src_lang, tgt_lang, writer, context_segments=1, max_prompt_tokens=None):
         self.llm = llm
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.writer = writer
         self.context_segments = context_segments
+        self.max_prompt_tokens = max_prompt_tokens
+        self._tokenizer = None
         self.segments = []           # finished (source, translation) pairs, newest last
-        self.prefix = ""             # fixed translation prefix of the open segment
-        self.prev_translation = ""
-        self.committed = []          # words already written for the open segment
-        self.last_src = ""           # source text of the last LLM call (open segment)
-        self.last_translation = ""
-        self.had_tail = False        # the previous line had an unconfirmed tail
+        self.src_offset = 0          # source words of the open ASR segment already translated (splits)
+        self.last_full = ""          # whole source text of the open ASR segment at the last update
+        self._reset_open()
         self.revisions = 0           # written words later contradicted by the final translation
         self.llm_calls = 0
+        self.trimmed = 0             # LLM calls without context because it did not fit
+        self.splits = 0              # forced splits of over-long segments
 
-    def _contexts(self):
+    def _reset_open(self):
+        self.prefix = ""             # fixed translation prefix of the open (part of the) segment
+        self.prev_translation = ""
+        self.committed = []          # words already written for it
+        self.last_src = ""           # its source text at the last LLM call
+        self.last_translation = ""
+        self.had_tail = False        # the previous line had an unconfirmed tail
+
+    # ---- prompt length
+
+    def _n_tokens(self, src, prefix, src_ctx, tgt_ctx):
+        if self._tokenizer is None:
+            self._tokenizer = self.llm.nmt_model.get_tokenizer()
+        prompt = self.llm.prompt_template.format(self.src_lang, self.tgt_lang, src, prefix, src_ctx, tgt_ctx)
+        return len(self._tokenizer.encode(prompt))
+
+    def _contexts(self, src_text):
         last = self.segments[len(self.segments) - self.context_segments:] if self.context_segments > 0 else []
-        return " ".join(x for x, _ in last), " ".join(y for _, y in last)
+        src_ctx, tgt_ctx = " ".join(x for x, _ in last), " ".join(y for _, y in last)
+        if not self.max_prompt_tokens or not (src_ctx or tgt_ctx):
+            return src_ctx, tgt_ctx
+        if self._n_tokens(src_text, self.prefix, src_ctx, tgt_ctx) <= self.max_prompt_tokens:
+            return src_ctx, tgt_ctx
+        self.trimmed += 1  # does not fit: no context at all for this call
+        return "", ""
+
+    def _too_long(self, src_text):
+        return bool(self.max_prompt_tokens) and \
+            self._n_tokens(src_text, self.prefix, "", "") > self.max_prompt_tokens // 2
+
+    # ---- translation steps
 
     def _translate(self, src_text):
         if src_text == self.last_src and self.last_translation:
             return self.last_translation
-        src_ctx, tgt_ctx = self._contexts()
+        src_ctx, tgt_ctx = self._contexts(src_text)
         self.llm_calls += 1
         return self.llm.translate(
             [src_text], [self.prefix], [self.src_lang], [self.tgt_lang], [src_ctx], [tgt_ctx]
         )[0]
 
+    def _open_text(self, full_text):
+        """The part of the ASR segment's text not yet covered by a forced split."""
+        return " ".join(full_text.split()[self.src_offset:])
+
     def update(self, src_text, start, end, clock, ref):
-        """New (possibly unstable) source text of the open segment: one LLM step."""
-        src_text = " ".join(src_text.split())
+        """New (possibly unstable) source text of the open ASR segment: one LLM step."""
+        full = " ".join(src_text.split())
+        src_text = self._open_text(full)
         if not src_text:
+            return
+        self.last_full = full
+        if self._too_long(src_text):
+            self._close(src_text, start, end, clock, ref, is_final=False)
+            self.src_offset = len(full.split())
+            self.splits += 1
             return
         # An unchanged source is not skipped: NeMo runs one LLM step per ASR step, and the next step on
         # the same source gives the same translation, so the common prefix with the previous one is the
@@ -641,27 +695,35 @@ class StreamingTranslator:
             self.had_tail = bool(tail)
         self.prefix = new_prefix
 
-    def finalize(self, src_text, start, end, clock, ref):
-        """The open segment is complete (EoU): translate it fully, write the rest, reset."""
-        src_text = " ".join(src_text.split())
-        if not src_text:
-            return
-        with clock.compute():
-            translation = self._translate(src_text)
+    def _close(self, src_text, start, end, clock, ref, is_final):
+        """Translate src_text completely, write the rest, make it context, reset the open part."""
+        translation = ""
+        if src_text:
+            with clock.compute():
+                translation = self._translate(src_text)
         words = translation.split()
         if words[: len(self.committed)] != self.committed:
             self.revisions += 1
-        self.writer.step(words[len(self.committed):], [], start, end, clock.emission(ref), True)
-        self.segments.append((src_text, translation.strip()))
-        self.segments = self.segments[-50:]
-        self.prefix = self.prev_translation = self.last_src = self.last_translation = ""
-        self.committed = []
-        self.had_tail = False
+        if words[len(self.committed):] or is_final:
+            self.writer.step(words[len(self.committed):], [], start, end, clock.emission(ref), is_final)
+        if src_text:
+            self.segments.append((src_text, translation.strip()))
+            self.segments = self.segments[-50:]
+        self._reset_open()
+
+    def finalize(self, src_text, start, end, clock, ref):
+        """The ASR segment is complete (EoU): translate the rest fully, write it, reset."""
+        full = " ".join(src_text.split())
+        if not full:
+            return
+        self._close(self._open_text(full), start, end, clock, ref, is_final=True)
+        self.src_offset = 0
+        self.last_full = ""
 
     def finish(self, start, end, clock, ref):
         """End of input: close a segment that never got an EoU."""
-        if self.last_src:
-            self.finalize(self.last_src, start, end, clock, ref)
+        if self.last_full:
+            self.finalize(self.last_full, start, end, clock, ref)
 
 
 class AsrEventFeeder:
