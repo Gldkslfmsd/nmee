@@ -228,7 +228,7 @@ def main():
         shout(f"  {k}: {v}")
     # statistics per system of the written segments (the same as eval_systems.py on the output)
     print()
-    eval_systems.print_table(*eval_systems.collect(seg["record"] for seg in segments[:next_seg]))
+    eval_systems.print_report(*eval_systems.collect(seg["record"] for seg in segments[:next_seg]))
 
 
 if __name__ == "__main__":
