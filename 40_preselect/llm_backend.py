@@ -19,8 +19,10 @@ Add a new backend by subclassing Backend and registering it in BACKENDS.
 """
 import json
 import os
+import random
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass, fields
 
@@ -40,11 +42,14 @@ class BackendConfig:
     dtype: str = "auto"
     vllm_subprocess: bool = False
     vllm_plugins: bool = False
+    vllm_kwargs: str = None         # JSON object with more arguments for vllm.LLM(...)
     # einfra / any OpenAI-compatible API
     api_base: str = None
     api_key_env: str = "E_INFRA_API_TOKEN,CESNET_API_KEY,LLM_API_KEY"
     timeout: float = 120.0
     retries: int = 3
+    rate_limit_retries: int = 30    # extra retries on 429 / 503, with backoff, not counted in retries
+    max_wait: float = 120.0         # longest wait between two attempts after a 429 / 503
 
     @classmethod
     def from_args(cls, args):
@@ -73,6 +78,10 @@ def add_arguments(parser):
                    help="vllm: run the engine in a subprocess (vLLM's default; may fail to init CUDA)")
     g.add_argument("--vllm-plugins", action="store_true",
                    help="vllm: load third-party vLLM plugins (NeMo etc.), off by default")
+    g.add_argument("--vllm-kwargs", metavar="JSON",
+                   help="vllm: more arguments for vllm.LLM(...) as a JSON object, e.g. "
+                        "'{\"kernel_config\": {\"linear_backend\": \"marlin\"}, \"enforce_eager\": true}'; "
+                        "they override the options above")
     g.add_argument("--api-base", default=os.environ.get("LLM_API_BASE"),
                    help=f"base URL of the OpenAI-compatible API, usually ending in /v1 "
                         f"(default: $LLM_API_BASE; --backend einfra uses {EINFRA_URL})")
@@ -81,6 +90,12 @@ def add_arguments(parser):
                         f"(default: {BackendConfig.api_key_env})")
     g.add_argument("--timeout", type=float, default=BackendConfig.timeout)
     g.add_argument("--retries", type=int, default=BackendConfig.retries)
+    g.add_argument("--rate-limit-retries", type=int, default=BackendConfig.rate_limit_retries,
+                   help="API: how many times to wait and retry a request rejected with 429 Too Many "
+                        "Requests or 503, in addition to --retries (the wait follows the server's "
+                        "Retry-After, else grows exponentially up to --max-wait)")
+    g.add_argument("--max-wait", type=float, default=BackendConfig.max_wait,
+                   help="API: longest wait in seconds before retrying after a 429 / 503")
 
 
 # e-INFRA LLM service (URL and model names as used in 20-find-bad-translation-divergencies.py)
@@ -132,6 +147,15 @@ class VLLMBackend(Backend):
                       gpu_memory_utilization=cfg.gpu_memory_utilization, dtype=cfg.dtype)
         if cfg.max_model_len:
             kwargs["max_model_len"] = cfg.max_model_len
+        if cfg.vllm_kwargs:
+            try:
+                extra = json.loads(cfg.vllm_kwargs)
+            except json.JSONDecodeError as e:
+                sys.exit(f"--vllm-kwargs is not valid JSON: {e}")
+            if not isinstance(extra, dict):
+                sys.exit("--vllm-kwargs must be a JSON object, e.g. '{\"enforce_eager\": true}'")
+            kwargs.update(extra)
+            print(f"vllm: extra arguments {extra}", file=sys.stderr)
         self.llm = LLM(**kwargs)
         print(f"vllm: loaded {cfg.model} in {time.time() - t0:.0f}s", file=sys.stderr)
 
@@ -217,7 +241,9 @@ class APIBackend(Backend):
         if self.key:
             headers["Authorization"] = f"Bearer {self.key}"
         last = None
-        for attempt in range(self.cfg.retries):
+        attempt = 0   # failed attempts, without the rate-limited ones
+        limited = 0   # 429 / 503 answers of this request
+        while attempt < self.cfg.retries:
             try:
                 req = urllib.request.Request(self.url, data=data, headers=headers)
                 with urllib.request.urlopen(req, timeout=self.cfg.timeout) as resp:
@@ -225,12 +251,19 @@ class APIBackend(Backend):
                 return payload["choices"][0]["message"]["content"]
             except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
                 last = e
-                if isinstance(e, urllib.error.HTTPError) and e.code in (404, 405):
+                code = e.code if isinstance(e, urllib.error.HTTPError) else None
+                if code in (429, 503) and limited < self.cfg.rate_limit_retries:
+                    limited += 1
+                    self._rate_limited(code)
+                    time.sleep(self._wait(e, limited))
+                    continue  # does not use up --retries
+                if code in (404, 405):
                     break  # wrong URL: retrying will not help
-                if "response_format" in body and isinstance(e, urllib.error.HTTPError) and e.code == 400:
+                if "response_format" in body and code == 400:
                     body.pop("response_format")  # server does not support schemas
                     data = json.dumps(body).encode("utf-8")
                 time.sleep(2 ** attempt)
+                attempt += 1
         hint = ""
         import urllib.error as _ue
         if isinstance(last, _ue.HTTPError):
@@ -239,9 +272,34 @@ class APIBackend(Backend):
                         f"list the models with: --list-models")
             elif last.code in (401, 403):
                 hint = f" -- missing or wrong API key (${self.cfg.api_key_env})"
-        print(f"WARNING: request failed after {self.cfg.retries} attempts: {last}{hint}",
-              file=sys.stderr)
+            elif last.code in (429, 503):
+                hint = (f" -- still rate limited after {limited} waits; lower --batch-size "
+                        f"(now {self.cfg.batch_size} parallel requests)")
+        print(f"WARNING: request failed: {last}{hint}", file=sys.stderr)
         return None
+
+    _lock = threading.Lock()
+    _limited_total = 0
+
+    def _rate_limited(self, code):
+        """Count the 429 / 503 answers; report the first one and then every 100th."""
+        with APIBackend._lock:
+            APIBackend._limited_total += 1
+            n = APIBackend._limited_total
+        if n == 1 or n % 100 == 0:
+            print(f"note: the server answered {code} (rate limited) {n}x so far; waiting and retrying. "
+                  f"If this keeps happening, lower --batch-size (now {self.cfg.batch_size} parallel "
+                  f"requests)", file=sys.stderr, flush=True)
+
+    def _wait(self, error, limited):
+        """Seconds to wait after a 429 / 503: the server's Retry-After, else exponential with jitter."""
+        retry_after = error.headers.get("Retry-After") if getattr(error, "headers", None) else None
+        try:
+            wait = float(retry_after)
+        except (TypeError, ValueError):
+            wait = 2 ** min(limited, 10)
+        # jitter, so that the parallel requests do not all come back at the same moment
+        return min(self.cfg.max_wait, wait) * (0.5 + random.random())
 
     def list_models(self):
         """GET {base}/models -- what the server offers."""
