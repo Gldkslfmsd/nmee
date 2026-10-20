@@ -16,6 +16,7 @@ verdicts, and for every rule at least one translation (a system or a contrastive
 A target is harmful if it fails at least one rule. The reference target is expected to fail;
 the others are compared with the human same_harm labels.
 
+Edits are autosaved 1.5 s after the last keystroke (and when leaving the item or closing the tab).
 Rules and verdicts are saved to --output (JSONL, one line per span; rewritten on every save,
 and loaded again on start, so you can stop and continue).
 
@@ -474,6 +475,10 @@ PAGE = r"""<!doctype html>
 .it{padding:5px 10px;cursor:pointer;border-left:3px solid transparent;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .it:hover{background:var(--hl2)}.it.cur{border-left-color:var(--acc);background:var(--hl2)}
 .it .m{display:inline-block;width:14px;font:700 12.5px ui-monospace,monospace}
+.it .br{display:inline-block;width:3.2em;text-align:right;padding-right:.4em;color:var(--mute);font-family:ui-monospace,monospace}
+.it .ns{color:var(--fail);font-size:11px;margin-left:4px}
+.it.g1{border-top:1px solid var(--line)}.it.gl{border-bottom:1px solid var(--line)}
+.multi{color:var(--fail);font-weight:700}
 .m.progress{color:var(--err)}.m.finished{color:var(--pass)}.m.remove{color:var(--fail)}.m.undecidable{color:var(--acc)}.m.pending{color:var(--mute)}
 .trk{display:flex;gap:4px;margin-right:10px}.trk span{padding:4px 10px;border-radius:14px;font-size:12px;background:var(--hl2);color:var(--mute)}
 .trk span.on{background:var(--pass);color:#fff;font-weight:600}
@@ -509,6 +514,7 @@ th{font-size:12px;color:var(--mute);font-weight:600}
 .legend{font-size:12px;color:var(--mute)}
 .errbox{margin:10px 0 0;padding:10px 12px;border:1px solid var(--fail);border-radius:8px;background:var(--failbg);color:var(--fail);
  font:12.5px/1.45 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+.errbox.note{border-color:var(--err);background:var(--errbg);color:var(--err)}
 </style></head><body>
 <div id="side"><input id="flt" placeholder="filter: id, span or mark (- ! . x ?)" title="marks: - pending, ! in progress, . finished, x remove, ? undecidable"><div id="list"></div></div>
 <div id="main">
@@ -519,12 +525,11 @@ th{font-size:12px;color:var(--mute);font-weight:600}
  <h2>Source (gold transcript)</h2><div class="box" id="src"></div>
  <h2>ASR given to <span id="refsys2"></span></h2><div class="box msg" id="asr"></div>
  <h2>Targets and verdicts</h2><div id="tgts"></div>
- <h2>Verification rules <span class="legend">— one rule per line (R1, R2, …); Ctrl+Enter = verify, Ctrl+S = save</span></h2>
+ <h2>Verification rules <span class="legend">— one rule per line (R1, R2, …); autosaved; Ctrl+Enter = verify</span></h2>
  <textarea id="rules" spellcheck="false"></textarea>
  <div class="bar"><button class="p" id="vbtn" onclick="verify()">Verify</button>
-  <button onclick="save()">Save</button>
-  <label class="msg" title="ask the LLM again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label>
-  <span class="msg" id="msg"></span></div>
+  <span class="msg" id="msg"></span>
+  <label class="msg" style="margin-left:auto" title="ask the LLM again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label></div>
  <div class="bar"><span class="msg">mark as:</span>
   <button class="dec" data-d="remove" onclick="decide('remove')">remove</button>
   <button class="dec" data-d="undecidable" onclick="decide('undecidable')">undecidable</button>
@@ -535,37 +540,62 @@ th{font-size:12px;color:var(--mute);font-weight:600}
 </div>
 <script>
 let items=[],cur=0,item=null,dirty=false,contr=[];  // contr: the human contrastive translations being edited
+// autosave: every edit calls touch(); 1.5 s after the last edit the rules and contrastive translations are saved.
+// edits counts the edits, so that a save that was sent before newer edits does not clear 'dirty';
+// seq/applied make sure that an older response never overwrites a newer one.
+let edits=0,timer=null,seq=0,applied=0;
+const AUTOSAVE_MS=1500;
+function touch(){dirty=true;edits++;clearTimeout(timer);timer=setTimeout(autosave,AUTOSAVE_MS);$('msg').textContent='unsaved changes…'}
+function stopAutosave(){clearTimeout(timer);timer=null}
+async function autosave(){stopAutosave();if(!dirty||!item)return;const at=edits,s=++seq,i=cur;
+ try{const r=await api('/api/save',{i,rules:rulesNow(),contrastive:contr});
+  if(i!==cur||s<applied)return;applied=s;
+  items[cur].status=r.status;item.record=r.record;renderList();renderStatus();   // no re-render: keep the cursor where it is
+  if(edits===at){dirty=false;$('msg').textContent='autosaved '+new Date().toLocaleTimeString()}
+  if(r.notice)showErr(r.notice)}
+ catch(e){$('msg').textContent='autosave failed';showErr('Autosave failed: '+e.message);timer=setTimeout(autosave,10000)}}
 const $=id=>document.getElementById(id), esc=s=>(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const MARK={pending:'-',progress:'!',finished:'.',remove:'x',undecidable:'?'};
 function renderStatus(){const st=items[cur].status,ph=st=='pending'?'pending':st=='progress'?'progress':'finished';
  document.querySelectorAll('#trk span').forEach(e=>{e.classList.toggle('on',e.dataset.s==ph);
   if(e.dataset.s=='finished')e.textContent=ph=='finished'&&st!='finished'?'finished: '+st:'finished'});
  document.querySelectorAll('button.dec').forEach(b=>b.classList.toggle('on',b.dataset.d==st))}
-function applyResp(r){contr=r.record.contrastive.map(c=>({...c}));items[cur].status=r.status;item.record=r.record;
+function applyResp(r,s){if(s!=null){if(s<applied)return;applied=s}contr=r.record.contrastive.map(c=>({...c}));items[cur].status=r.status;item.record=r.record;
  renderRes(r.record);renderList();renderStatus()}
-async function decide(d){const st=items[cur].status,nd=st==d?null:d;showErr('');
- try{const r=await api('/api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd});dirty=false;applyResp(r);
-  $('msg').textContent=nd?'marked as '+nd:'unticked: in progress';showErr(r.notice)}
+async function decide(d){const st=items[cur].status,nd=st==d?null:d;showErr('');stopAutosave();const s=++seq;
+ try{const r=await api('/api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd});dirty=false;applyResp(r,s);
+  $('msg').textContent=nd?'marked as '+nd:'unticked: in progress';
+  if(nd=='finished'&&GROUP[cur].length>1&&!r.notice)showErr("There are multiple spans in this segment. Check that the finished rules don't check the same span. If they do, remove one of them.",true);
+  else showErr(r.notice,nd==null)}
  catch(e){$('msg').textContent='not marked';showErr(e.message);if(e.data&&e.data.record){dirty=false;applyResp(e.data)}}}
 async function api(p,body){let r;
  try{r=await fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})}
  catch(e){throw new Error('The editor server is not reachable ('+e.message+'). Is rule_editor.py still running?')}
  const t=await r.text();let j=null;try{j=JSON.parse(t)}catch(e){}
  if(!r.ok){const e=new Error(j&&j.error?j.error:`HTTP ${r.status}: ${t}`);e.data=j;throw e}return j}
-function showErr(m){const b=$('err');b.textContent=m||'';b.hidden=!m}
+function showErr(m,note){const b=$('err');b.textContent=m||'';b.hidden=!m;b.classList.toggle('note',!!note)}
+// spans of the same segment: GROUP[i] = [indices of all items of that segment], in order
+let GROUP=[];
+function buildGroups(){const by={};items.forEach((it,i)=>(by[it.seg]=by[it.seg]||[]).push(i));GROUP=items.map(it=>by[it.seg])}
 function renderList(){const f=$('flt').value.toLowerCase();
  $('list').innerHTML=items.map((it,i)=>{const t=`${MARK[it.status]} ${it.seg} ${it.span}`.toLowerCase();
   if(f&&!t.includes(f))return'';
-  return `<div class="it${i==cur?' cur':''}" onclick="go(${i})" title="${esc(it.span)}"><span class="m ${it.status}">${MARK[it.status]}</span>${it.seg} · ${esc(it.span)}</div>`}).join('')}
+  const g=GROUP[i],k=g.indexOf(i),n=g.length,m=`<span class="m ${it.status}">${MARK[it.status]}</span>`;
+  const cls='it'+(i==cur?' cur':'')+(n>1&&k==0?' g1':'')+(n>1&&k==n-1?' gl':'');
+  // first span of a segment: id + span (and how many spans); the others branch off below it
+  const body=k==0?`${it.seg} · ${esc(it.span)}${n>1?`<span class="ns">${n} spans</span>`:''}`
+   :`<span class="br">${k==n-1?'└─':'├─'}</span>${esc(it.span)}`;
+  return `<div class="${cls}" onclick="go(${i})" title="${esc(it.seg+' · '+it.span)}">${m}${body}</div>`}).join('')}
 function hl(text,s,e,others){ // highlight current span [s,e) and other confirmed spans
  const marks=[];if(s!=null)marks.push([s,e,'']);(others||[]).forEach(o=>marks.push([o[0],o[1],'o']));
  marks.sort((a,b)=>a[0]-b[0]);let out='',p=0;
  for(const [a,b,c] of marks){if(a<p)continue;out+=esc(text.slice(p,a))+`<mark class="${c}">${esc(text.slice(a,b))||'∅'}</mark>`;p=b}
  return out+esc(text.slice(p))}
 async function go(i){if(i<0||i>=items.length)return;
- if(dirty&&!confirm('Rules changed and not saved. Leave?'))return;
+ if(dirty){await autosave();if(dirty&&!confirm('Your changes could not be saved (see the error). Leave anyway?'))return}
  cur=i;item=await api('/api/item?i='+i);dirty=false;location.hash=i;
- $('title').textContent=item.seg+' · '+item.ref_system+' · span '+(item.span_index+1);$('pos').textContent=`${i+1} / ${items.length}`;
+ {const g=GROUP[i],n=g.length,k=g.indexOf(i)+1;
+  $('title').innerHTML=esc(item.seg+' · '+item.ref_system+' · ')+(n>1?`<span class="multi">span ${k} / ${n}</span>`:'span 1 / 1')}$('pos').textContent=`${i+1} / ${items.length}`;
  $('src').textContent=item.source;$('asr').textContent=item.asr;$('refsys2').textContent=item.ref_system+' ('+(item.asr_system||'asr')+')';
  const a=$('aud');a.pause();if(item.has_audio){a.src='/api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
  contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));
@@ -600,36 +630,45 @@ function renderRes(rec){ // table: system | target | one tick per rule; human co
 function grow(el){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px'}
 function freeLabel(){const used=new Set([item.ref_system,...Object.keys(item.others),...contr.map(c=>c.label)]);
  let k=1;while(used.has('contrastive '+k))k++;return 'contrastive '+k}
-function addContr(){contr.push({label:freeLabel(),text:''});dirty=true;renderRes(item.record);const a=document.querySelectorAll('.ct');a[a.length-1].focus()}
-function delContr(j){if(contr[j].text.trim()&&!confirm('Remove '+contr[j].label+'?'))return;contr.splice(j,1);dirty=true;renderRes(item.record)}
+function addContr(){contr.push({label:freeLabel(),text:''});touch();renderRes(item.record);const a=document.querySelectorAll('.ct');a[a.length-1].focus()}
+function delContr(j){if(contr[j].text.trim()&&!confirm('Remove '+contr[j].label+'?'))return;contr.splice(j,1);touch();renderRes(item.record)}
 document.addEventListener('input',e=>{const el=e.target,j=+el.dataset.j;
- if(el.classList.contains('cl')){contr[j].label=el.value;dirty=true;return}   // renaming keeps the verdicts
+ if(el.classList.contains('cl')){contr[j].label=el.value;touch();return}   // renaming keeps the verdicts
  if(!el.classList.contains('ct'))return;
- contr[j].text=el.value;dirty=true;grow(el);
+ contr[j].text=el.value;touch();grow(el);
  el.closest('tr').querySelectorAll('td.r').forEach(td=>{td.className='r msg';td.textContent='·';td.removeAttribute('title')})});
 const rulesNow=()=>$('rules').value.split('\n').map(s=>s.trim()).filter(Boolean);
-async function save(){showErr('');try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr});dirty=false;applyResp(r);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
+async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
 async function verify(){const rules=rulesNow();if(!rules.length){$('msg').textContent='write at least one rule';return}
  $('vbtn').disabled=true;showErr('');const t0=Date.now();$('msg').textContent='verifying '+rules.length+' rule(s) × '+(1+Object.keys(item.others).length+contr.filter(c=>c.text.trim()).length)+' targets…';
- try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked});dirty=false;applyResp(r);
+ stopAutosave();const s=++seq;
+ try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked});dirty=false;applyResp(r,s);
   const st=r.stats||{};$('msg').textContent=`verified and saved (${((Date.now()-t0)/1000).toFixed(1)} s; ${st.cached||0} from cache, ${st.asked||0} asked)`+(r.errors&&r.errors.length?', with errors':'');
   showErr([...(r.errors||[]),r.notice].filter(Boolean).join('\n\n'))}catch(e){$('msg').textContent='verification failed';showErr(e.message)}
  $('vbtn').disabled=false}
-$('rules').addEventListener('input',()=>{dirty=true;if(item)renderRes(item.record)});$('flt').addEventListener('input',renderList);
+$('rules').addEventListener('input',()=>{touch();if(item)renderRes(item.record)});$('flt').addEventListener('input',renderList);
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='Enter'){e.preventDefault();verify()}
- if((e.ctrlKey||e.metaKey)&&e.key=='s'){e.preventDefault();save()}
+ if((e.ctrlKey||e.metaKey)&&e.key=='s'){e.preventDefault();save()}  // save at once (and no browser "save page" dialog)
  if(e.altKey&&e.key=='ArrowDown'){e.preventDefault();go(cur+1)}if(e.altKey&&e.key=='ArrowUp'){e.preventDefault();go(cur-1)}});
-window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
-(async()=>{items=await api('/api/items');go(Math.min(parseInt(location.hash.slice(1))||0,items.length-1))})();
+// closing or reloading the tab: send the last edits without waiting for an answer
+window.addEventListener('pagehide',()=>{if(dirty&&item)navigator.sendBeacon('/api/save',
+ new Blob([JSON.stringify({i:cur,rules:rulesNow(),contrastive:contr})],{type:'application/json'}))});
+window.addEventListener('hashchange',()=>{const i=parseInt(location.hash.slice(1));if(!isNaN(i)&&i!==cur)go(i)});
+(async()=>{items=await api('/api/items');buildGroups();go(Math.min(parseInt(location.hash.slice(1))||0,items.length-1))})();
 </script></body></html>"""
 
 
-def dropped(old, rec, item):
-    """A message if the span was finished and the new state no longer allows it."""
-    if old == "finished" and rec.get("decision") != "finished":
-        return ("No longer finished (back to in progress):\n- "
-                + "\n- ".join(finish_problems(item, rec)))
-    return None
+def dropped(old, rec, item, chosen=KEEP):
+    """A message if the span was finished and is not any more. chosen: the decision the annotator
+    clicked (KEEP if the change came from an edit, i.e. 'finished' was dropped automatically)."""
+    if old != "finished" or rec.get("decision") == "finished":
+        return None
+    if chosen is None:
+        return 'You unticked "finished"; you may have something to finish.'
+    if chosen is not KEEP:  # switched to remove / undecidable: nothing to say
+        return None
+    probs = finish_problems(item, rec)
+    return "No longer finished (back to in progress)" + (":\n- " + "\n- ".join(probs) if probs else ".")
 
 
 def make_handler(items, store, verifier, audio_roots):
@@ -653,6 +692,7 @@ def make_handler(items, store, verifier, audio_roots):
             self.send_response(code)
             self.send_header("Content-Type", ctype + "; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")  # never run an old copy of the page
             self.end_headers()
             self.wfile.write(data)
 
@@ -745,7 +785,8 @@ def make_handler(items, store, verifier, audio_roots):
                                        "notice": dropped(old, rec, it)})
                 else:
                     return self._send(404, "not found", "text/plain")
-                self._json({"record": rec, "status": status(rec), "notice": dropped(old, rec, it)})
+                chosen = (body.get("decision") or None) if self.path == "/api/decide" else KEEP
+                self._json({"record": rec, "status": status(rec), "notice": dropped(old, rec, it, chosen)})
             except Exception as e:
                 import traceback
                 traceback.print_exc()

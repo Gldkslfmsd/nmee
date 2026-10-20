@@ -1,0 +1,2 @@
+- to be done:
+- there will be a minimal code that uses LLM verifier and rules, and it rates systems
