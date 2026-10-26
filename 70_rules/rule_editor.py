@@ -161,13 +161,16 @@ def verify_item(verifier, item, rules, contrastive=(), use_cache=True, thinking=
 
 
 def normalize_contrastive(raw, item):
-    """[{"label", "text"}] with non-empty labels that are unique and differ from the system names.
+    """[{"label", "text", "confirmed"}] with non-empty labels that are unique and differ from the system
+    names; confirmed: the annotator's pass/fail for it (None = not chosen yet).
     Accepts plain strings too (older saved files)."""
     taken = {item["ref_system"], *item["others"]}
     out = []
     for j, c in enumerate(raw or []):
+        conf = None
         if isinstance(c, dict):
             label, text = str(c.get("label", "")).strip(), str(c.get("text", ""))
+            conf = c.get("confirmed") if c.get("confirmed") in ("pass", "fail") else None
         else:
             label, text = "", str(c)
         label = label or f"contrastive {j + 1}"
@@ -175,8 +178,14 @@ def normalize_contrastive(raw, item):
         while label in taken:
             label, n = f"{base} ({n})", n + 1
         taken.add(label)
-        out.append({"label": label, "text": text})
+        out.append({"label": label, "text": text, "confirmed": conf})
     return out
+
+
+def normalize_confirmed(raw, item):
+    """{system: 'pass'|'fail'} of the annotator for the other systems (the reference is always fail)."""
+    raw = raw if isinstance(raw, dict) else {}
+    return {s: raw[s] for s in item["others"] if raw.get(s) in ("pass", "fail")}
 
 
 # ---------------------------------------------------------------------------- store
@@ -219,7 +228,7 @@ class Store:
         r = self.records.get(key)
         return r["rules"] if r else self.prefill.get(key, [])
 
-    def put(self, item, rules, contrastive, results=None, model=None, decision=KEEP):
+    def put(self, item, rules, contrastive, results=None, model=None, decision=KEEP, confirmed=KEEP):
         """Save rules, contrastive translations, verdicts and the annotator's decision.
         decision: KEEP (the saved one), None, or one of DECISIONS. A 'finished' that the new state
         no longer satisfies (see finish_problems) is dropped back to in progress."""
@@ -229,6 +238,7 @@ class Store:
             "seg": item["seg"], "ref_system": item["ref_system"], "span_index": item["span_index"],
             "span": item["span"], "span_start": item["span_start"], "span_end": item["span_end"],
             "source": item["source"], "rules": rules, "contrastive": contrastive,
+            "confirmed": (old or {}).get("confirmed", {}) if confirmed is KEEP else confirmed,
             "human_same_harm": item["same_harm"],
             "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
@@ -305,7 +315,7 @@ def startup_verify(items, store, verifier, use_cache=True):
             if rec.get("decision") == "finished" and finish_problems(it, rec):
                 broken.append(it["key"])
         else:
-            store.transient[it["key"]] = {"key": it["key"], "rules": rules, "contrastive": [],
+            store.transient[it["key"]] = {"key": it["key"], "rules": rules, "contrastive": [], "confirmed": {},
                                           "verified_with": verifier.label(),
                                           "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                                           "results": res, **summary}
@@ -346,21 +356,40 @@ def finish_problems(item, rec):
     if not rules:
         return ["Write at least one verification rule."]
     res = rec.get("results") or {}
-    targets = [item["ref_system"], *item["others"]] + [c["label"] for c in rec.get("contrastive", [])
-                                                       if c["text"].strip()]
+    conf = confirmations(item, rec)
+    targets = list(conf)
+    out = []
+    missing = [t for t in targets if conf[t] is None]
+    if missing:
+        out.append(f"Choose pass or fail in the human expert column for: {', '.join(missing)}.")
+    if not any(conf[t] == "pass" for t in targets):
+        out.append("No translation is marked pass in the human expert column. If all systems contain the harm, "
+                   "add a contrastive translation without it, mark it pass, and verify.")
     stale = [t for t in targets if len(res.get(t) or []) != len(rules)]
     if stale:
-        return [f"Verify first: there are no current verdicts for {', '.join(stale)}."]
-    out = []
-    unclear = [t for t in targets if overall(res[t]) == "error"]
+        out.append(f"Verify first: there are no current verdicts for {', '.join(stale)}.")
+    done = [t for t in targets if t not in stale]
+    unclear = [t for t in done if overall(res[t]) == "error"]
     if unclear:
         out.append(f"Some overall verdicts are ? (LLM error) for {', '.join(unclear)}; verify again.")
-    if overall(res[item["ref_system"]]) == "pass":
-        out.append(f"{item['ref_system']} (the confirmed harmful error) passes all rules, so the rules do not "
-                   f"catch the error; change the rules and verify.")
-    if not any(overall(res[t]) == "pass" for t in targets):
-        out.append("No translation passes all rules. If no system does, add a contrastive translation that "
-                   "passes all of them (e.g. a correct translation of the span), then verify.")
+    wrong = [f"{t} (LLM judge: {overall(res[t])}, human expert: {conf[t]})" for t in done
+             if conf[t] and overall(res[t]) in ("pass", "fail") and overall(res[t]) != conf[t]]
+    if wrong:
+        out.append("The overall verdict of the LLM judge differs from the human expert for: " + "; ".join(wrong)
+                   + ". Change the rules (or your judgement) and verify.")
+    return out
+
+
+def confirmations(item, rec):
+    """{translation: 'pass'|'fail'|None}: the reference is fail (the confirmed harm); the other
+    systems and the non-empty contrastive translations have the annotator's choice (None = not yet)."""
+    sysconf = rec.get("confirmed") or {}
+    out = {item["ref_system"]: "fail"}
+    for s in item["others"]:
+        out[s] = sysconf.get(s)
+    for c in rec.get("contrastive") or []:
+        if c["text"].strip():
+            out[c["label"]] = c.get("confirmed")
     return out
 
 
@@ -409,7 +438,12 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 button.x{font-size:11.5px;padding:1px 7px;margin-top:4px;color:var(--mute)}
 .tt th.ov,.tt td.ov{border-left:2px solid var(--line);width:64px}
 .tt td.ov.bad{background:var(--failbg)}
-.tt th.ex,.tt td.ex{border-left:2px solid var(--line);width:58px;text-align:center;font-size:12px;font-weight:400;color:var(--mute)}
+.tt th.ex,.tt td.ex{border-left:2px solid var(--line);border-right:2px solid var(--line);width:84px;text-align:center;white-space:nowrap}
+.tt th.ex{font-weight:700;color:var(--ink);font-size:12.5px}.tt th.ex .sub{font-weight:400;color:var(--mute);font-size:11px}
+.tt td.ex.fixed{font-weight:700;color:var(--fail);font-size:15px}
+.tt th.grp{text-align:center;border-bottom:1px solid var(--line);font-size:11.5px}
+button.cf{font-size:13px;font-weight:700;padding:1px 7px;margin:0 1px;color:var(--mute)}
+button.cf.pass.on{background:var(--pass);border-color:var(--pass);color:#fff}button.cf.fail.on{background:var(--fail);border-color:var(--fail);color:#fff}
 .ok{color:var(--pass)}.no{color:var(--fail)}.er{color:var(--err)}
 audio{width:100%;max-width:520px;height:34px;margin-top:10px}
 mark{background:var(--hl);color:inherit;padding:0 2px;border-radius:3px}mark.o{background:none;border-bottom:2px dashed var(--mute)}
@@ -461,7 +495,7 @@ __INSTRUCTIONS__
  <div class="msg" id="vnote"></div>
 </div>
 <script>
-let items=[],cur=0,item=null,dirty=false,contr=[];  // contr: the human contrastive translations being edited
+let items=[],cur=0,item=null,dirty=false,contr=[],conf={};  // conf: the annotator's pass/fail per system  // contr: the human contrastive translations being edited
 // autosave: every edit calls touch(); 1.5 s after the last edit the rules and contrastive translations are saved.
 // edits counts the edits, so that a save that was sent before newer edits does not clear 'dirty';
 // seq/applied make sure that an older response never overwrites a newer one.
@@ -470,7 +504,7 @@ const AUTOSAVE_MS=1500;
 function touch(){dirty=true;edits++;clearTimeout(timer);timer=setTimeout(autosave,AUTOSAVE_MS)}
 function stopAutosave(){clearTimeout(timer);timer=null}
 async function autosave(){stopAutosave();if(!dirty||!item)return;const at=edits,s=++seq,i=cur;
- try{const r=await api('/api/save',{i,rules:rulesNow(),contrastive:contr});
+ try{const r=await api('/api/save',{i,rules:rulesNow(),contrastive:contr,confirmed:conf});
   if(i!==cur||s<applied)return;applied=s;
   items[cur].status=r.status;item.record=r.record;renderList();renderStatus();   // no re-render: keep the cursor where it is
   if(edits===at)dirty=false   // silent: only a failure is shown
@@ -482,10 +516,10 @@ function renderStatus(){const st=items[cur].status,ph=st=='pending'?'pending':st
  document.querySelectorAll('#trk span').forEach(e=>{e.classList.toggle('on',e.dataset.s==ph);
   if(e.dataset.s=='finished')e.textContent=ph=='finished'&&st!='finished'?'finished: '+st:'finished'});
  document.querySelectorAll('button.dec').forEach(b=>b.classList.toggle('on',b.dataset.d==st))}
-function applyResp(r,s){if(s!=null){if(s<applied)return;applied=s}contr=r.record.contrastive.map(c=>({...c}));items[cur].status=r.status;item.record=r.record;
+function applyResp(r,s){if(s!=null){if(s<applied)return;applied=s}contr=r.record.contrastive.map(c=>({...c}));conf={...(r.record.confirmed||{})};items[cur].status=r.status;item.record=r.record;
  renderRes(r.record);renderList();renderStatus()}
 async function decide(d){const st=items[cur].status,nd=st==d?null:d;showErr('');stopAutosave();const s=++seq;
- try{const r=await api('/api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd});dirty=false;applyResp(r,s);
+ try{const r=await api('/api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd,confirmed:conf});dirty=false;applyResp(r,s);
   $('msg').textContent=nd?'marked as '+nd:'unticked: in progress';
   if(nd=='finished'&&GROUP[cur].length>1&&!r.notice)showErr("There are multiple spans in this segment. Check that the finished rules don't check the same span. If they do, remove one of them.",true);
   else showErr(r.notice,nd==null)}
@@ -526,7 +560,7 @@ async function go(i){if(i<0||i>=items.length)return;
   $('title').innerHTML=esc(item.seg+' · '+item.ref_system+' · ')+(n>1?`<span class="multi">span ${k} / ${n}</span>`:'span 1 / 1')}$('pos').textContent=`${i+1} / ${items.length}`;
  $('src').textContent=item.source;
  const a=$('aud');a.pause();if(item.has_audio){a.src='/api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
- contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));
+ contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));conf={...((item.record&&item.record.confirmed)||{})};
  $('rules').value=(item.rules||[]).join('\n');$('msg').textContent='';showErr(item.backend_error);initThinking(item.default_thinking);renderStatus();renderRes(item.record);renderList();
  document.querySelector('.it.cur')?.scrollIntoView({block:'nearest'})}
 function savedFor(rec,s,c){ // saved verdicts of system s, or of contrastive c (matched by its text), if still valid
@@ -543,20 +577,32 @@ function ticks(rec,s,c,n){let h='';const vs=savedFor(rec,s,c);
 function overallOf(vs){if(!vs)return null;const v=vs.map(x=>x.verdict);
  return v.includes('fail')?'fail':v.includes('error')?'error':'pass'}
 const GLYPH={pass:['ok','✓'],fail:['no','✗'],error:['er','?']};
-function overallCell(rec,s,c,expect){ // overall verdict, then the expected one (if any) in its own column
- const o=overallOf(savedFor(rec,s,c));
- const ex=`<td class="ex"${expect?` title="expected: ${expect}"`:''}>${expect?GLYPH[expect][1]:''}</td>`;
- if(!o)return `<td class="r ov msg">·</td>`+ex;
+function confCell(s,j){ // the "confirmed" column: fixed fail for the reference, pass/fail buttons for the others
+ if(s===item.ref_system)return `<td class="ex fixed" title="the confirmed harmful error: always fail">✗</td>`;
+ const v=j==null?conf[s]:contr[j].confirmed,a=j==null?`data-s="${esc(s)}"`:`data-j="${j}"`;
+ return `<td class="ex">`+['pass','fail'].map(x=>`<button class="cf ${x}${v===x?' on':''}" ${a} data-v="${x}" `
+  +`title="human expert: ${x}${v===x?' (click again to clear)':''}">${GLYPH[x][1]}</button>`).join('')+`</td>`}
+function overallCell(rec,s,c,expect){ // overall verdict of the LLM judge (red if it differs from the human expert)
+ const o=overallOf(savedFor(rec,s,c)),ex='';
+ if(!o)return `<td class="r ov msg">·</td>`;
  const [k,g]=GLYPH[o],bad=expect&&o!==expect;
  return `<td class="r ov ${k}${bad?' bad':''}" title="${o=='fail'?'fails at least one rule':o=='pass'?'passes all rules':'a verdict is an LLM error'}`
-  +`${expect?'; expected: '+expect:''}">${g}</td>`+ex}
+  +`${expect?'; human expert: '+expect:''}">${g}</td>`+ex}
+document.addEventListener('click',e=>{const b=e.target.closest('button.cf');if(!b)return;
+ const v=b.dataset.v;
+ if(b.dataset.j!=null){const c=contr[+b.dataset.j];c.confirmed=c.confirmed===v?null:v}
+ else{const s=b.dataset.s;if(conf[s]===v)delete conf[s];else conf[s]=v}
+ touch();renderRes(item.record)});
 function nRules(){return rulesNow().length||(item.record&&item.record.rules?item.record.rules.length:0)}
 function renderRes(rec){ // table: system | target | one tick per rule; human contrastive rows at the bottom
  const sys=[item.ref_system,...Object.keys(item.others)],n=nRules();
- let t='<table class="tt"><tr><th>system</th><th>target</th>'+Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+'<th class="r ov">overall</th><th class="ex">expected</th></tr>';
- for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${ticks(rec,s,null,n)}${overallCell(rec,s,null,s==item.ref_system?'fail':null)}</tr>`;
+ let t='<table class="tt"><tr><th rowspan="2">system</th><th rowspan="2">target</th>'
+  +'<th rowspan="2" class="ex">human expert<br><span class="sub">(your judgement)</span></th>'
+  +`<th colspan="${n+1}" class="grp">LLM judge with your rules</th></tr><tr>`
+  +Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+'<th class="r ov">overall</th></tr>';
+ for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${confCell(s,null)}${ticks(rec,s,null,n)}${overallCell(rec,s,null,s==item.ref_system?'fail':conf[s])}</tr>`;
  contr.forEach((c,j)=>{t+=`<tr><td class="sys"><input class="cl" data-j="${j}" value="${esc(c.label)}" title="label (editable)"><br><button class="x" onclick="delContr(${j})" title="remove this contrastive translation">remove</button></td>`
-   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${ticks(rec,null,c,n)}${overallCell(rec,null,c,null)}</tr>`});
+   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${confCell(null,j)}${ticks(rec,null,c,n)}${overallCell(rec,null,c,c.confirmed)}</tr>`});
  t+=`<tr><td colspan="${4+n}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
  $('tgts').innerHTML=t+'</table>';
  document.querySelectorAll('.ct').forEach(grow);
@@ -576,11 +622,11 @@ document.addEventListener('input',e=>{const el=e.target,j=+el.dataset.j;
  contr[j].text=el.value;touch();grow(el);
  el.closest('tr').querySelectorAll('td.r').forEach(td=>{td.className='r msg';td.textContent='·';td.removeAttribute('title')})});
 const rulesNow=()=>$('rules').value.split('\n').map(s=>s.trim()).filter(Boolean);
-async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
+async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
 async function verify(){const rules=rulesNow();if(!rules.length){$('msg').textContent='write at least one rule';return}
  $('vbtn').disabled=true;showErr('');const t0=Date.now();$('msg').textContent='verifying '+rules.length+' rule(s) × '+(1+Object.keys(item.others).length+contr.filter(c=>c.text.trim()).length)+' targets…';
  stopAutosave();const s=++seq;
- try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked,thinking:thinkingNow()});dirty=false;applyResp(r,s);
+ try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked,thinking:thinkingNow(),confirmed:conf});dirty=false;applyResp(r,s);
   const st=r.stats||{};$('msg').textContent=`verified and saved (${((Date.now()-t0)/1000).toFixed(1)} s; ${st.cached||0} from cache, ${st.asked||0} asked)`+(r.errors&&r.errors.length?', with errors':'');
   showErr([...(r.errors||[]),r.notice].filter(Boolean).join('\n\n'))}catch(e){$('msg').textContent='verification failed';showErr(e.message)}
  $('vbtn').disabled=false}
@@ -591,7 +637,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='Enter
  if(e.altKey&&e.key=='ArrowDown'){e.preventDefault();go(cur+1)}if(e.altKey&&e.key=='ArrowUp'){e.preventDefault();go(cur-1)}});
 // closing or reloading the tab: send the last edits without waiting for an answer
 window.addEventListener('pagehide',()=>{if(dirty&&item)navigator.sendBeacon('/api/save',
- new Blob([JSON.stringify({i:cur,rules:rulesNow(),contrastive:contr})],{type:'application/json'}))});
+ new Blob([JSON.stringify({i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf})],{type:'application/json'}))});
 window.addEventListener('hashchange',()=>{const i=parseInt(location.hash.slice(1));if(!isNaN(i)&&i!==cur)go(i)});
 try{if(localStorage.getItem('instrOpen')==='0')$('instr').open=false}catch(e){}
 $('instr').addEventListener('toggle',()=>{try{localStorage.setItem('instrOpen',$('instr').open?'1':'0')}catch(e){}});
@@ -715,14 +761,15 @@ def make_handler(items, store, verifier, audio_roots, instructions=None):
                 it = self._item(body["i"])
                 rules = [str(r).strip() for r in body.get("rules", []) if str(r).strip()]
                 contrastive = normalize_contrastive(body.get("contrastive"), it)
+                confirmed = normalize_confirmed(body["confirmed"], it) if "confirmed" in body else KEEP
                 old = (store.records.get(it["key"]) or {}).get("decision")
                 if self.path == "/api/save":
-                    rec = store.put(it, rules, contrastive)
+                    rec = store.put(it, rules, contrastive, confirmed=confirmed)
                 elif self.path == "/api/decide":
                     d = body.get("decision") or None
                     if d not in (None, *DECISIONS):
                         raise ValueError(f"unknown decision {d!r}")
-                    rec = store.put(it, rules, contrastive, decision=d)
+                    rec = store.put(it, rules, contrastive, decision=d, confirmed=confirmed)
                     if d == "finished" and rec["decision"] != "finished":
                         probs = finish_problems(it, rec)
                         return self._json({"error": "Cannot mark as finished:\n- " + "\n- ".join(probs),
@@ -739,7 +786,7 @@ def make_handler(items, store, verifier, audio_roots, instructions=None):
                                                              thinking=thinking)
                     except VerifyError as e:
                         return self._json({"error": str(e)}, 502)
-                    rec = store.put(it, rules, contrastive, results, verifier.label(thinking))
+                    rec = store.put(it, rules, contrastive, results, verifier.label(thinking), confirmed=confirmed)
                     print(f"{it['key']}: {len(rules)} rule(s) verified in {time.time() - t0:.1f}s "
                           f"({stats['cached']} cached, {stats['asked']} asked)", file=sys.stderr)
                     return self._json({"record": rec, "status": status(rec), "errors": errors, "stats": stats,
