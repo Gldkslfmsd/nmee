@@ -33,7 +33,7 @@ class BackendConfig:
     model: str = "Qwen/Qwen3-4B-Instruct-2507"
     max_new_tokens: int = 4000
     temperature: float = 0.0
-    batch_size: int = 64            # einfra: parallel requests; vllm: chats per llm.chat() call
+    batch_size: int = 1            # einfra: parallel requests; vllm: chats per llm.chat() call
     guided_json: bool = True        # constrain the output to the JSON schema where supported
     # vllm
     tensor_parallel_size: int = 1

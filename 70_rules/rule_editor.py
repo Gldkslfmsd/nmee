@@ -4,7 +4,7 @@
 For every human-confirmed harmful span (one editor item), the page shows
   - the source (gold transcript) and the ASR the reference system translated,
   - all target translations: the reference one (e.g. canary_cs) with the span highlighted,
-    and the other systems (other_outputs),
+    and the other systems (from --systems: every text in the target language; else other_outputs),
   - an editable box with one or more verification rules (one rule per line).
   - editable human contrastive translations (add/remove any number), each with an editable label
     (default 'contrastive 1', 'contrastive 2', ...), below the systems and verified with the
@@ -16,6 +16,8 @@ verdicts, and for every rule at least one translation (a system or a contrastive
 A target is harmful if it fails at least one rule. The reference target is expected to fail;
 the others are compared with the human same_harm labels.
 
+At startup, all rules (saved in --output, or prefilled from --rules) are verified against all
+targets with the LLM, answers in the cache are reused (--no-startup-verify skips this).
 Edits are autosaved 1.5 s after the last keystroke (and when leaving the item or closing the tab).
 Rules and verdicts are saved to --output (JSONL, one line per span; rewritten on every save,
 and loaded again on start, so you can stop and continue).
@@ -25,6 +27,8 @@ Usage:
       --backend einfra --model gpt-oss-120B
   # then open http://localhost:8765  (on a cluster: ssh -L 8765:localhost:8765 host)
 
+  --systems systems.jsonl            translations of the other systems ({"document", "audio",
+                                     "systems_info": {sys: {"lan"}}, "text": {sys: ...}} per segment)
   --rules verification_rules.jsonl   prefill rules ({"rule_id": "<doc>.<seg>.rN",
                                      "canary_span": [...], "rule": "..."} per line)
   --backend dummy                    no model: the reference target fails, the others pass
@@ -33,14 +37,11 @@ Usage:
                                      pairs; the page has a checkbox to ask again anyway
   --audio-root DIR                   where the relative 'audio' paths start (default: the current
                                      directory, then the directory of the data file)
-The backend options (--backend, --model, --api-base, ...) come from llm_backend.py,
-which must be importable (same directory or PYTHONPATH); see --backend-module.
+The LLM verifier (prompt, answer parsing, cache) is in llm_verifier.py, which also runs the rules
+in batch. The backend options (--backend, --model, --api-base, ...) come from llm_backend.py.
+Both must be importable (same directory or PYTHONPATH).
 """
 import argparse
-import importlib
-import contextlib
-import hashlib
-import io
 import json
 import mimetypes
 import os
@@ -51,23 +52,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-DEFAULT_PROMPT = """You check one translation against one verification rule.
-
-SOURCE (English): {source}
-TRANSLATION (Czech): {translation}
-VERIFICATION RULE: {rule}
-
-Judge only what the rule is about. Ignore all other errors in the translation.
-Answer with JSON: {{"evidence": "<the part of the translation the rule applies to, quoted, or 'omitted'>", "verdict": "pass" | "fail"}}"""
-
-SCHEMA = {
-    "type": "object",
-    "properties": {"evidence": {"type": "string"},
-                   "verdict": {"type": "string", "enum": ["pass", "fail"]}},
-    "required": ["evidence", "verdict"],
-    "additionalProperties": False,
-}
-
+import llm_backend
+from llm_verifier import (ProgressLog, Verifier, VerifyError, add_thinking_argument, load_systems,
+                          parse_verdict, read_prompt, seg_key, summarize_reasons, DEFAULT,
+                          THINKING_LEVELS,
+                          target_texts)
 
 # ---------------------------------------------------------------------------- data
 
@@ -86,15 +75,24 @@ def locate(text, span):
     return (i, i + len(span["span"])) if i >= 0 else (None, None)
 
 
-def load_items(path):
-    """One item per (segment, reference target, confirmed span)."""
+def load_items(path, systems=None):
+    """One item per (segment, reference target, confirmed span).
+    systems: from load_systems(); the other systems come from there instead of other_outputs."""
     items = []
+    missing, used = [], set()
     with open(path, encoding="utf-8") as f:
         for n, line in enumerate(f, 1):
             if not line.strip():
                 continue
             d = json.loads(line)
             sid = seg_id(d)
+            sysline = None
+            if systems is not None:
+                sysline = systems.get(seg_key(d))
+                if sysline is None:
+                    missing.append(f"{sid} (line {n}, {d.get('audio')})")
+                else:
+                    used.add(seg_key(d))
             for t in d.get("targets", []):
                 spans = t.get("harm_spans", [])
                 marks = [locate(t["text"], s) for s in spans]
@@ -110,22 +108,37 @@ def load_items(path):
                         "other_spans": [m for j, m in enumerate(marks) if j != i and m[0] is not None],
                         "same_harm": sp.get("same_harm", {}),
                         "ai": [a for a in t.get("ai_suggested_spans", [])],
-                        "others": d.get("other_outputs", {}),
+                        "others": ({s: x for s, x in target_texts(sysline, t["system"], t.get("tgt_lan"),
+                                                               skip=("gold_transcript", d.get("asr_system"))).items()
+                                    if s != t["system"]} if sysline else d.get("other_outputs", {})),
                     })
+    if systems is not None:
+        for m in missing[:20]:
+            print(f"WARNING: confirmed segment not in --systems, shown without other systems: {m}",
+                  file=sys.stderr)
+        if len(missing) > 20:
+            print(f"WARNING: ... and {len(missing) - 20} more such segments", file=sys.stderr)
+        print(f"--systems: {len(used)} segments used, {len(systems) - len(used)} skipped (no confirmed "
+              f"spans), {len(missing)} confirmed segments missing", file=sys.stderr)
     return items
 
 
 def load_prefill(path, items):
-    """Rules from a verification_rules.jsonl (rule_id '<seg>.rN', canary_span, rule)."""
+    """Rules from a verification_rules.jsonl, one rule per line: matched by "key" (the item key,
+    as written by synthesize_rules.py) if present, else by rule_id '<seg>.rN' and canary_span."""
     by_seg = {}
     for it in items:
         by_seg.setdefault(it["seg"], []).append(it)
+    keys = {it["key"] for it in items}
     rules = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             r = json.loads(line)
+            if r.get("key") in keys:
+                rules.setdefault(r["key"], []).append(r["rule"])
+                continue
             sid = re.sub(r"\.r\d+$", "", r.get("rule_id", ""))
             spans = r.get("canary_span") or []
             spans = [spans] if isinstance(spans, str) else spans
@@ -137,202 +150,14 @@ def load_prefill(path, items):
 
 # ---------------------------------------------------------------------------- verifier
 
-def parse_verdict(text):
-    """{'verdict': 'pass'|'fail'|'error', 'evidence': ...} from a model answer."""
-    if text is None:
-        return {"verdict": "error", "evidence": "request failed"}
-    t = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
-    for m in reversed(list(re.finditer(r"\{[^{}]*\}", t, flags=re.S))):
-        try:
-            o = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            continue
-        v = str(o.get("verdict", "")).strip().lower()
-        if v in ("pass", "fail"):
-            return {"verdict": v, "evidence": str(o.get("evidence", ""))}
-    m = re.search(r"\b(pass|fail)\b", t, flags=re.I)
-    if m:
-        return {"verdict": m.group(1).lower(), "evidence": "", "raw": text}
-    return {"verdict": "error", "evidence": "unparsable answer", "raw": text}
-
-
-class VerifyError(Exception):
-    """The LLM could not be used; the message is shown in the editor."""
-
-
-class Tee(io.TextIOBase):
-    """Write to the real stderr and keep a copy (the backend reports failures on stderr)."""
-
-    def __init__(self, real):
-        self.real, self.parts = real, []
-
-    def write(self, text):
-        self.parts.append(text)
-        return self.real.write(text)
-
-    def flush(self):
-        self.real.flush()
-
-    def text(self):
-        return "".join(self.parts).strip()
-
-
-def describe(e):
-    if isinstance(e, SystemExit):  # the backends call sys.exit("message") on configuration errors
-        return str(e.code) if e.code not in (None, 0, 1) else "the backend exited"
-    return f"{type(e).__name__}: {e}"
-
-
-def summarize_reasons(reasons):
-    """Distinct failure reasons, each with how many requests it hit."""
-    counts = {}
-    for r in reasons:
-        counts[r] = counts.get(r, 0) + 1
-    return "\n".join(f"{n}x {r}" if n > 1 else r for r, n in counts.items())
-
-
-class Cache:
-    """Disk cache of LLM answers: one JSON line per answer, appended as they come.
-    The key is a hash of everything that determines the answer: backend, model, decoding settings
-    and the full chat (prompt with source, translation and rule filled in). Only answers with a
-    pass/fail verdict are stored, so failed or unparsable requests are asked again next time."""
-
-    def __init__(self, path):
-        self.path, self.data, self.lock = path, {}, threading.Lock()
-        if path and os.path.exists(path):
-            with open(path, encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        r = json.loads(line)
-                        self.data[r["key"]] = r["answer"]
-                    except (json.JSONDecodeError, KeyError):
-                        pass  # a line cut off by a crash
-            print(f"cache: {len(self.data)} LLM answers in {path}", file=sys.stderr)
-
-    @staticmethod
-    def key(settings, chat):
-        return hashlib.sha256(json.dumps([settings, chat], ensure_ascii=False, sort_keys=True)
-                              .encode("utf-8")).hexdigest()
-
-    def get(self, key):
-        return self.data.get(key)
-
-    def put_many(self, entries, model):
-        """entries: [(key, answer)]"""
-        if not self.path or not entries:
-            return
-        with self.lock, open(self.path, "a", encoding="utf-8") as f:
-            for k, a in entries:
-                self.data[k] = a
-                f.write(json.dumps({"key": k, "model": model, "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                    "answer": a}, ensure_ascii=False) + "\n")
-
-
-class Verifier:
-    def __init__(self, args, mod):
-        self.prompt = DEFAULT_PROMPT
-        if args.prompt:
-            with open(args.prompt, encoding="utf-8") as f:
-                self.prompt = f.read()
-        self.mod = mod
-        self.cfg = mod.BackendConfig.from_args(args)
-        self.dummy = self.cfg.backend == "dummy"
-        self.backend, self.init_error = None, None
-        self.lock = threading.Lock()   # vLLM is not thread-safe; one verification at a time
-        self.model = "dummy" if self.dummy else f"{self.cfg.backend}:{self.cfg.model}"
-        # what changes the answer, besides the chat itself
-        self.settings = {"backend": self.cfg.backend, "model": self.cfg.model,
-                         "temperature": self.cfg.temperature, "max_new_tokens": self.cfg.max_new_tokens,
-                         "guided_json": self.cfg.guided_json}
-        self.cache = Cache(None if (self.dummy or args.no_cache) else
-                           (args.cache or os.path.splitext(args.output)[0] + ".llm-cache.jsonl"))
-        if not self.dummy:
-            self._init_backend()
-
-    def _init_backend(self):
-        """Load the backend; on failure keep the editor running and remember the error
-        (shown in the page; the next Verify tries again)."""
-        tee = Tee(sys.stderr)
-        try:
-            with contextlib.redirect_stderr(tee):
-                self.backend = self.mod.get_backend(self.cfg)
-            self.init_error = None
-        except (Exception, SystemExit) as e:
-            self.backend = None
-            log = tee.text()
-            self.init_error = (f"Could not start the LLM backend {self.model}: {describe(e)}"
-                               + (f"\n\n{log}" if log else ""))
-            print(self.init_error, file=sys.stderr)
-
-    def chat(self, source, translation, rule):
-        content = (self.prompt.replace("{source}", source).replace("{translation}", translation)
-                   .replace("{rule}", rule).replace("{{", "{").replace("}}", "}"))
-        return [{"role": "user", "content": content}]
-
-    def verify(self, item, rules, contrastive=(), use_cache=True):
-        """({system: [verdict per rule]}, [error messages], {"cached": n, "asked": m}) for the
-        reference, all other systems and the human contrastive translations (under their labels).
-        With use_cache, pairs answered before come from the disk cache; new answers are added to it."""
-        targets = {item["ref_system"]: item["ref_text"], **item["others"],
-                   **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
-        jobs = [(s, k) for s in targets for k in range(len(rules))]
-        reasons = []
-        stats = {"cached": 0, "asked": 0}
-        if self.dummy:
-            answers = [json.dumps({"evidence": "(dummy)",
-                                   "verdict": "fail" if s == item["ref_system"] else "pass"})
-                       for s, _ in jobs]
-            stats["asked"] = len(jobs)
-        else:
-            chats = [self.chat(item["source"], targets[s], rules[k]) for s, k in jobs]
-            keys = [Cache.key(self.settings, c) for c in chats]
-            answers = [self.cache.get(k) if use_cache else None for k in keys]
-            todo = [i for i, a in enumerate(answers) if a is None]
-            stats = {"cached": len(jobs) - len(todo), "asked": len(todo)}
-            if todo:
-                with self.lock:
-                    if self.backend is None:
-                        self._init_backend()
-                        if self.backend is None:
-                            raise VerifyError(self.init_error)
-                    tee = Tee(sys.stderr)
-                    try:
-                        with contextlib.redirect_stderr(tee):
-                            new = list(self.backend.generate([chats[i] for i in todo], SCHEMA))
-                    except (Exception, SystemExit) as e:
-                        log = tee.text()
-                        raise VerifyError(f"The LLM call failed: {describe(e)}" + (f"\n\n{log}" if log else ""))
-                log = tee.text()
-                # the API backends return None for a request that failed and print why on stderr
-                # (parallel requests can interleave their lines, hence the regex)
-                reasons = [r.strip() for r in re.findall(r"WARNING: request failed: (.*?)(?=WARNING:|\n|$)", log)]
-                failed = sum(a is None for a in new)
-                if failed == len(jobs):
-                    raise VerifyError(f"All {failed} LLM requests failed; nothing was saved.\n\n"
-                                      + (summarize_reasons(reasons) or log or "no details from the backend"))
-                for i, a in zip(todo, new):
-                    answers[i] = a
-                self.cache.put_many([(keys[i], a) for i, a in zip(todo, new)
-                                     if a is not None and parse_verdict(a)["verdict"] != "error"], self.model)
-        res = {s: [None] * len(rules) for s in targets}
-        errors = []
-        for (s, k), a in zip(jobs, answers):
-            v = parse_verdict(a)
-            if a is None and not self.dummy:
-                v["evidence"] = reasons[0] if reasons else "request failed"
-            res[s][k] = v
-        n_failed = sum(v["verdict"] == "error" and v["evidence"] != "unparsable answer"
-                       for vs in res.values() for v in vs)
-        n_unparsed = sum(v["verdict"] == "error" and v["evidence"] == "unparsable answer"
-                         for vs in res.values() for v in vs)
-        if n_failed:
-            errors.append(f"{n_failed} of {len(jobs)} LLM requests failed (marked ?)."
-                          + (f"\n{summarize_reasons(reasons)}" if reasons else ""))
-        if n_unparsed:
-            raw = next(v.get("raw") for vs in res.values() for v in vs if v["evidence"] == "unparsable answer")
-            errors.append(f"{n_unparsed} LLM answer(s) had no pass/fail verdict (marked ?). "
-                          f"First one:\n{(raw or '')[:1500]}")
-        return res, errors, stats
+def verify_item(verifier, item, rules, contrastive=(), use_cache=True, thinking=DEFAULT):
+    """({target: [verdict per rule]}, [error messages], stats) for the reference, the other systems
+    and the non-empty contrastive translations (under their labels) of an editor item.
+    thinking: the level for these requests (DEFAULT: --enable-thinking)."""
+    targets = {item["ref_system"]: item["ref_text"], **item["others"],
+               **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
+    return verifier.verify(item["source"], targets, rules, use_cache, dummy_fail={item["ref_system"]},
+                           thinking=thinking)
 
 
 def normalize_contrastive(raw, item):
@@ -373,6 +198,22 @@ class Store:
             print(f"loaded {len(self.records)} saved items from {path}", file=sys.stderr)
         self.order = [it["key"] for it in items]
         self.prefill = prefill
+        # verdicts of the startup verification for spans that were never saved (only prefilled
+        # rules): shown in the page, but not written, so that these spans stay pending
+        self.transient = {}
+
+    def view(self, key):
+        """The record the page shows: the saved one, else the unsaved startup verification."""
+        return self.records.get(key) or self.transient.get(key)
+
+    def write(self):
+        with self.lock:
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                for k in self.order + [k for k in self.records if k not in self.order]:
+                    if k in self.records:
+                        f.write(json.dumps(self.records[k], ensure_ascii=False) + "\n")
+            os.replace(tmp, self.path)
 
     def rules(self, key):
         r = self.records.get(key)
@@ -382,7 +223,7 @@ class Store:
         """Save rules, contrastive translations, verdicts and the annotator's decision.
         decision: KEEP (the saved one), None, or one of DECISIONS. A 'finished' that the new state
         no longer satisfies (see finish_problems) is dropped back to in progress."""
-        old = self.records.get(item["key"])
+        old = self.view(item["key"])
         rec = {
             "key": item["key"], "document": item["document"], "audio": item["audio"],
             "seg": item["seg"], "ref_system": item["ref_system"], "span_index": item["span_index"],
@@ -404,6 +245,7 @@ class Store:
                 if by_text.get(c["text"]):
                     res[c["label"]] = by_text[c["text"]]
             rec.update(verified_with=old.get("verified_with"), results=res, **summarize(item, rules, res))
+        self.transient.pop(item["key"], None)
         dec = (old or {}).get("decision") if decision is KEEP else decision
         if dec == "finished" and finish_problems(item, rec):
             dec = None
@@ -412,13 +254,74 @@ class Store:
             rec["decided_at"] = (old or {}).get("decided_at") if dec == (old or {}).get("decision") else rec["saved_at"]
         with self.lock:
             self.records[item["key"]] = rec
-            tmp = self.path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                for k in self.order + [k for k in self.records if k not in self.order]:
-                    if k in self.records:
-                        f.write(json.dumps(self.records[k], ensure_ascii=False) + "\n")
-            os.replace(tmp, self.path)
+        self.write()
         return rec
+
+
+def startup_verify(items, store, verifier, use_cache=True):
+    """Verify the rules of every span (saved, or prefilled from --rules) against all its targets
+    before the server starts, in one batch; answers in the cache are not asked again.
+    Saved spans get the verdicts written to --output; prefilled-only spans keep them in memory."""
+    todo = []
+    for it in items:
+        rec = store.records.get(it["key"])
+        rules = store.rules(it["key"])
+        if not rules or (rec or {}).get("decision") == "remove":
+            continue
+        contrastive = normalize_contrastive((rec or {}).get("contrastive"), it)
+        targets = {it["ref_system"]: it["ref_text"], **it["others"],
+                   **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
+        todo.append((it, rec, rules, contrastive, targets))
+    if not todo:
+        return
+    jobs = [(n, s, k) for n, (_, _, rules, _, tg) in enumerate(todo) for s in tg for k in range(len(rules))]
+    print(f"startup verification: {len(jobs)} (translation, rule) pairs of {len(todo)} spans",
+          file=sys.stderr, flush=True)
+    t0 = time.time()
+
+    progress = ProgressLog("startup verification")
+
+    if verifier.dummy:
+        answers = ["fail" if s == todo[n][0]["ref_system"] else "pass" for n, s, _ in jobs]
+        stats, reasons = {"cached": 0, "asked": len(jobs)}, []
+    else:
+        chats = [verifier.chat(todo[n][0]["source"], todo[n][4][s], todo[n][2][k]) for n, s, k in jobs]
+        try:
+            answers, stats, reasons = verifier.answer(chats, use_cache, progress)
+        except VerifyError as e:
+            print(f"WARNING: startup verification failed, starting without it:\n{e}", file=sys.stderr)
+            return
+    results = [{s: [None] * len(rules) for s in tg} for _, _, rules, _, tg in todo]
+    for (n, s, k), a in zip(jobs, answers):
+        v = parse_verdict(a)
+        if a is None:
+            v["evidence"] = reasons[0] if reasons else "request failed"
+        results[n][s][k] = v
+    broken = []
+    for (it, rec, rules, contrastive, _), res in zip(todo, results):
+        summary = summarize(it, rules, res)
+        if rec is not None:
+            rec.update(verified_with=verifier.label(), results=res, **summary)
+            if rec.get("decision") == "finished" and finish_problems(it, rec):
+                broken.append(it["key"])
+        else:
+            store.transient[it["key"]] = {"key": it["key"], "rules": rules, "contrastive": [],
+                                          "verified_with": verifier.label(),
+                                          "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                          "results": res, **summary}
+    if store.records:
+        store.write()
+    errors = sum(v["verdict"] == "error" for res in results for vs in res.values() for v in vs)
+    passes = sum(overall(r[it["ref_system"]]) == "pass" for (it, _, rules, _, _), r in zip(todo, results))
+    print(f"startup verification done in {time.time() - t0:.0f}s: {stats['cached']} from cache, "
+          f"{stats['asked']} asked, {errors} errors; the reference passes all rules in {passes} of "
+          f"{len(todo)} spans", file=sys.stderr)
+    if reasons:
+        print("LLM failures:\n  " + summarize_reasons(reasons).replace("\n", "\n  "), file=sys.stderr)
+    if broken:
+        print(f"WARNING: {len(broken)} finished span(s) no longer pass the finished check with these "
+              f"verdicts (they stay finished; open them to check): {', '.join(broken[:10])}"
+              + (" ..." if len(broken) > 10 else ""), file=sys.stderr)
 
 
 def summarize(item, rules, results):
@@ -449,15 +352,23 @@ def finish_problems(item, rec):
     if stale:
         return [f"Verify first: there are no current verdicts for {', '.join(stale)}."]
     out = []
-    unclear = [t for t in targets if any(v["verdict"] == "error" for v in res[t])]
+    unclear = [t for t in targets if overall(res[t]) == "error"]
     if unclear:
-        out.append(f"Some verdicts are ? (LLM error) for {', '.join(unclear)}; verify again.")
-    nopass = [f"R{k + 1}" for k in range(len(rules)) if not any(res[t][k]["verdict"] == "pass" for t in targets)]
-    if nopass:
-        out.append(f"No translation passes {', '.join(nopass)}. If no system passes, add a contrastive "
-                   f"translation that passes the rule(s) (e.g. a correct translation of the span), "
-                   f"then verify.")
+        out.append(f"Some overall verdicts are ? (LLM error) for {', '.join(unclear)}; verify again.")
+    if overall(res[item["ref_system"]]) == "pass":
+        out.append(f"{item['ref_system']} (the confirmed harmful error) passes all rules, so the rules do not "
+                   f"catch the error; change the rules and verify.")
+    if not any(overall(res[t]) == "pass" for t in targets):
+        out.append("No translation passes all rules. If no system does, add a contrastive translation that "
+                   "passes all of them (e.g. a correct translation of the span), then verify.")
     return out
+
+
+def overall(verdicts):
+    """The overall verdict of one translation: fail if it fails a rule, else error if a verdict is
+    an error, else pass."""
+    vs = [v["verdict"] for v in verdicts]
+    return "fail" if "fail" in vs else "error" if "error" in vs else "pass"
 
 
 # ---------------------------------------------------------------------------- web
@@ -496,6 +407,9 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .tt input.cl{font:inherit;font-weight:600;width:150px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink)}
 .tt textarea.ct{min-height:0;font:inherit;padding:5px 7px;resize:none;overflow:hidden}
 button.x{font-size:11.5px;padding:1px 7px;margin-top:4px;color:var(--mute)}
+.tt th.ov,.tt td.ov{border-left:2px solid var(--line);width:64px}
+.tt td.ov.bad{background:var(--failbg)}
+.tt th.ex,.tt td.ex{border-left:2px solid var(--line);width:58px;text-align:center;font-size:12px;font-weight:400;color:var(--mute)}
 .ok{color:var(--pass)}.no{color:var(--fail)}.er{color:var(--err)}
 audio{width:100%;max-width:520px;height:34px;margin-top:10px}
 mark{background:var(--hl);color:inherit;padding:0 2px;border-radius:3px}mark.o{background:none;border-bottom:2px dashed var(--mute)}
@@ -512,12 +426,91 @@ th{font-size:12px;color:var(--mute);font-weight:600}
 .ai{font-size:12.5px;color:var(--mute);margin-top:4px}.ai b{color:var(--ink);font-weight:600}
 .nav{display:flex;gap:8px;align-items:center}.head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .legend{font-size:12px;color:var(--mute)}
+#instr{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:16px}
+#instr summary{cursor:pointer;padding:9px 14px;font-weight:600;user-select:none}
+#instr .instr{padding:0 18px 12px;font-size:13.5px;line-height:1.5;max-width:980px}
+#instr h3{font-size:14px;margin:12px 0 6px}#instr h4{font-size:13px;margin:12px 0 4px}
+#instr li{margin:3px 0}#instr code{font:12.5px ui-monospace,monospace;background:var(--hl2);padding:0 4px;border-radius:3px}
 .errbox{margin:10px 0 0;padding:10px 12px;border:1px solid var(--fail);border-radius:8px;background:var(--failbg);color:var(--fail);
  font:12.5px/1.45 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 .errbox.note{border-color:var(--err);background:var(--errbg);color:var(--err)}
 </style></head><body>
 <div id="side"><input id="flt" placeholder="filter: id, span or mark (- ! . x ?)" title="marks: - pending, ! in progress, . finished, x remove, ? undecidable"><div id="list"></div></div>
 <div id="main">
+<details id="instr" open><summary>Instructions</summary><div class="instr">
+<h3>Verification rules</h3>
+<p>Next, you’ll write verification rules that an AI will use to pass/fail translations. Your rule should be framed as generally as possible in testing
+the observed failure rather than hyper-specifically targeting particular wrong translations.</p>
+<ul>
+<li>Verification rules are targeting tricky things about your input. Together, your rules should check for what you think and observe could
+go wrong with translating it. They should certainly cover the issues you spotted with the models that you try in our interface, but they do
+not have to be limited to these issues. You can include a rule for something else you believe is tricky, even though the models you tried
+happened to get it right.</li>
+<li><b>Format:</b> Write a short instruction for an AI judge, e.g. “Check whether the translation conveys that the speaker feels no inner peace.”.
+The rule should clearly have a pass/fail conclusion. The verification rule should be written in English regardless of the source and target
+languages.</li>
+<li><b>Pass rate:</b> At most two automatic translations can pass your set of verification rules.</li>
+<li><b>Atomicity of your rule:</b> Each rule should only be checking for one conceptual issue. If you find yourself listing various separable conditions
+into a single rule, use multiple rules instead.</li>
+<li><b>Granularity of your rule:</b> Your verification rule should be specific enough to catch wrong translations but flexible enough to pass any
+reasonable correct phrasing.</li>
+<li>Accepted submissions typically have 1 or 2 focused rules rather than many generic ones. Good submissions also don’t contain rules that
+are passed by all or most models.</li>
+</ul>
+<h4>Examples</h4>
+<p>Example: The Chinese text “小猫在地上撒娇。” is translated as “The kitten is acting coquettishly on the ground.” which translates the
+concept of “playful cuteness” to “flirtatious cuteness”.<br>
+<i>Verification rule:</i> In this context, “撒娇” should be equivalent to acting cute and adorable, instead of having any flirtatious or sexual sense.</p>
+<p>Example: The Hindi sentence “जनाब एक होता हो लापड़ और उसक ऊपर होता हो झापड़ ” is translated literally as “Sir, there is one slap and on
+top of that there is slap.” while it’s actually commenting about the difference between two degrees of slapping, like a slap and a smack /
+bitch-slap.<br>
+<i>Verification rule:</i> The slap should not be prepositionally “above”, but rather in intensity.<br>
+<i>Verification rule:</i> The translations for both the slaps should be different, but close enough lexically.</p>
+<p>Example: The English text “Dissatisfied with EACL paper decisions? Fret not and submit your paper with ARR reviews to Multilingual
+Multicultural Evaluation workshop at EACL.” is translated as “Unzufrieden mit den EACL Papierentscheidungen? Machen Sie sich keine
+Sorgen und reichen Sie Ihre Arbeit mit ARR Rezensionen beim Multilingual Multicultural Evaluation Workshop der EACL ein.” which
+literally translates “paper” as “a piece of paper (Papier)”.<br>
+<i>Verification rule:</i> The word for “paper” should be “Artikel” or English loanword “Paper” but not “Papier”.</p>
+
+<h3>How to work in this editor, step by step</h3>
+<ol>
+<li><b>Pick a span</b> in the list on the left. The mark in front of it is its status: <code>-</code> pending, <code>!</code> in progress,
+<code>.</code> finished, <code>x</code> remove, <code>?</code> undecidable; type a mark or a word into the filter to find spans.
+Spans of the same segment are grouped (<code>├─</code> / <code>└─</code>), and the header then shows <span class="multi">span k / n</span>.</li>
+<li><b>Understand the input:</b> play the audio, read the source (gold transcript) and the ASR that the reference system translated.</li>
+<li><b>Find the error:</b> in the first row of the table, the reference translation, the confirmed harmful error is highlighted. Other confirmed
+spans of the same segment are underlined with dashes; they are separate items, write their rules there.</li>
+<li><b>Look at the other systems:</b> how does each of them render the same place? This shows what can go wrong, and what correct
+renderings look like.</li>
+<li><b>Write the rules</b> into the box, one rule per line (R1, R2, …). Rules suggested in advance may already be there: check, rewrite or
+delete them. Everything you type is saved automatically.</li>
+<li><b>Verify</b> (button or Ctrl+Enter). The AI judge checks every translation against every rule: ✓ pass, ✗ fail, ? the AI did not answer.
+Hover over a tick to see the rule and the verdict. <i>overall</i> is ✓ only if a translation passes all rules; <i>expected</i> shows that the
+reference must fail.</li>
+<li><b>Check the result and improve the rules:</b>
+ <ul>
+ <li>the reference must fail overall (its <i>overall</i> cell turns red if it does not): at least one rule has to catch the confirmed error;</li>
+ <li>at most two automatic translations may pass overall;</li>
+ <li>a rule that all or most translations pass is not useful;</li>
+ <li>if a verdict looks wrong to you, make the rule clearer or more precise, and verify again.</li>
+ </ul></li>
+<li><b>Add a contrastive translation</b> (+ add contrastive translation) if no system passes all rules: write a correct translation that should
+pass, verify, and check that it passes. You can also add a wrong variant to check that your rules catch it. The label in front of it
+can be renamed.</li>
+<li><b>Optional settings:</b> <i>reasoning</i> lets the AI think before it answers (slower, usually more careful); <i>ignore cache</i> asks the AI
+again instead of reusing its earlier answers.</li>
+<li><b>Mark the span</b> (mark as):
+ <ul>
+ <li><i>finished</i> when the rules are done; this needs at least one rule, current verdicts, the reference failing overall, and at least one
+ translation passing overall (a system or a contrastive one);</li>
+ <li><i>undecidable</i> if you cannot decide whether it is a harmful error, or how to write a rule for it;</li>
+ <li><i>remove</i> if it is not a real harmful error, or if another span of the same segment already covers it.</li>
+ </ul>
+ Click a ticked button again to untick it.</li>
+<li><b>Go to the next span</b> (next →, or Alt+↓). The status at the top (pending / in progress / finished) is updated automatically.</li>
+</ol>
+<p class="msg">Click “Instructions” to fold or unfold this text.</p>
+</div></details>
  <div class="head"><div><b id="title"></b> <span class="msg" id="pos"></span></div>
   <div class="nav"><div class="trk" id="trk"><span data-s="pending">pending</span><span data-s="progress">in progress</span><span data-s="finished">finished</span></div>
    <button onclick="go(cur-1)">← prev</button><button onclick="go(cur+1)">next →</button></div></div>
@@ -529,7 +522,8 @@ th{font-size:12px;color:var(--mute);font-weight:600}
  <textarea id="rules" spellcheck="false"></textarea>
  <div class="bar"><button class="p" id="vbtn" onclick="verify()">Verify</button>
   <span class="msg" id="msg"></span>
-  <label class="msg" style="margin-left:auto" title="ask the LLM again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label></div>
+  <label class="msg" style="margin-left:auto" id="thinklab"><input type="checkbox" id="think"> reasoning</label>
+  <label class="msg" title="ask the LLM again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label></div>
  <div class="bar"><span class="msg">mark as:</span>
   <button class="dec" data-d="remove" onclick="decide('remove')">remove</button>
   <button class="dec" data-d="undecidable" onclick="decide('undecidable')">undecidable</button>
@@ -545,13 +539,13 @@ let items=[],cur=0,item=null,dirty=false,contr=[];  // contr: the human contrast
 // seq/applied make sure that an older response never overwrites a newer one.
 let edits=0,timer=null,seq=0,applied=0;
 const AUTOSAVE_MS=1500;
-function touch(){dirty=true;edits++;clearTimeout(timer);timer=setTimeout(autosave,AUTOSAVE_MS);$('msg').textContent='unsaved changes…'}
+function touch(){dirty=true;edits++;clearTimeout(timer);timer=setTimeout(autosave,AUTOSAVE_MS)}
 function stopAutosave(){clearTimeout(timer);timer=null}
 async function autosave(){stopAutosave();if(!dirty||!item)return;const at=edits,s=++seq,i=cur;
  try{const r=await api('/api/save',{i,rules:rulesNow(),contrastive:contr});
   if(i!==cur||s<applied)return;applied=s;
   items[cur].status=r.status;item.record=r.record;renderList();renderStatus();   // no re-render: keep the cursor where it is
-  if(edits===at){dirty=false;$('msg').textContent='autosaved '+new Date().toLocaleTimeString()}
+  if(edits===at)dirty=false   // silent: only a failure is shown
   if(r.notice)showErr(r.notice)}
  catch(e){$('msg').textContent='autosave failed';showErr('Autosave failed: '+e.message);timer=setTimeout(autosave,10000)}}
 const $=id=>document.getElementById(id), esc=s=>(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -573,6 +567,12 @@ async function api(p,body){let r;
  catch(e){throw new Error('The editor server is not reachable ('+e.message+'). Is rule_editor.py still running?')}
  const t=await r.text();let j=null;try{j=JSON.parse(t)}catch(e){}
  if(!r.ok){const e=new Error(j&&j.error?j.error:`HTTP ${r.status}: ${t}`);e.data=j;throw e}return j}
+// "reasoning" tickbox: shows the --enable-thinking default until clicked; then ticked = low, unticked = no
+let thinkTouched=false,thinkDefault=null;
+function initThinking(d){if(thinkTouched)return;thinkDefault=d;$('think').checked=d!=='no';
+ $('thinklab').title='ticked: reasoning low; unticked: no reasoning. Until you click it, the command-line setting is used: '
+  +(d?'--enable-thinking '+d:'the model\'s default (no --enable-thinking)')}
+function thinkingNow(){return thinkTouched?($('think').checked?'low':'no'):null}
 function showErr(m,note){const b=$('err');b.textContent=m||'';b.hidden=!m;b.classList.toggle('note',!!note)}
 // spans of the same segment: GROUP[i] = [indices of all items of that segment], in order
 let GROUP=[];
@@ -599,7 +599,7 @@ async function go(i){if(i<0||i>=items.length)return;
  $('src').textContent=item.source;$('asr').textContent=item.asr;$('refsys2').textContent=item.ref_system+' ('+(item.asr_system||'asr')+')';
  const a=$('aud');a.pause();if(item.has_audio){a.src='/api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
  contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));
- $('rules').value=(item.rules||[]).join('\n');$('msg').textContent='';showErr(item.backend_error);renderStatus();renderRes(item.record);renderList();
+ $('rules').value=(item.rules||[]).join('\n');$('msg').textContent='';showErr(item.backend_error);initThinking(item.default_thinking);renderStatus();renderRes(item.record);renderList();
  document.querySelector('.it.cur')?.scrollIntoView({block:'nearest'})}
 function savedFor(rec,s,c){ // saved verdicts of system s, or of contrastive c (matched by its text), if still valid
  if(!rec||!rec.results||JSON.stringify(rec.rules)!==JSON.stringify(rulesNow()))return null;
@@ -610,21 +610,31 @@ function ticks(rec,s,c,n){let h='';const vs=savedFor(rec,s,c);
  for(let k=0;k<n;k++){const v=vs?vs[k]:null;
   if(!v){h+='<td class="r msg">·</td>';continue}
   const [c,g]=v.verdict=='pass'?['ok','✓']:v.verdict=='fail'?['no','✗']:['er','?'];
-  h+=`<td class="r ${c}" title="${esc('R'+(k+1)+': '+rec.rules[k]+'\n\n'+v.verdict.toUpperCase()+': '+(v.evidence||'')+(v.raw?'\n\nraw: '+v.raw:''))}">${g}</td>`}
+  h+=`<td class="r ${c}" title="${esc('R'+(k+1)+': '+rec.rules[k]+'\n\n'+v.verdict.toUpperCase()+(v.evidence?': '+v.evidence:'')+(v.raw?'\n\nraw: '+v.raw:''))}">${g}</td>`}
  return h}
+function overallOf(vs){if(!vs)return null;const v=vs.map(x=>x.verdict);
+ return v.includes('fail')?'fail':v.includes('error')?'error':'pass'}
+const GLYPH={pass:['ok','✓'],fail:['no','✗'],error:['er','?']};
+function overallCell(rec,s,c,expect){ // overall verdict, then the expected one (if any) in its own column
+ const o=overallOf(savedFor(rec,s,c));
+ const ex=`<td class="ex"${expect?` title="expected: ${expect}"`:''}>${expect?GLYPH[expect][1]:''}</td>`;
+ if(!o)return `<td class="r ov msg">·</td>`+ex;
+ const [k,g]=GLYPH[o],bad=expect&&o!==expect;
+ return `<td class="r ov ${k}${bad?' bad':''}" title="${o=='fail'?'fails at least one rule':o=='pass'?'passes all rules':'a verdict is an LLM error'}`
+  +`${expect?'; expected: '+expect:''}">${g}</td>`+ex}
 function nRules(){return rulesNow().length||(item.record&&item.record.rules?item.record.rules.length:0)}
 function renderRes(rec){ // table: system | target | one tick per rule; human contrastive rows at the bottom
  const sys=[item.ref_system,...Object.keys(item.others)],n=nRules();
- let t='<table class="tt"><tr><th>system</th><th>target</th>'+Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+'</tr>';
- for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${ticks(rec,s,null,n)}</tr>`;
+ let t='<table class="tt"><tr><th>system</th><th>target</th>'+Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+'<th class="r ov">overall</th><th class="ex">expected</th></tr>';
+ for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${ticks(rec,s,null,n)}${overallCell(rec,s,null,s==item.ref_system?'fail':null)}</tr>`;
  contr.forEach((c,j)=>{t+=`<tr><td class="sys"><input class="cl" data-j="${j}" value="${esc(c.label)}" title="label (editable)"><br><button class="x" onclick="delContr(${j})" title="remove this contrastive translation">remove</button></td>`
-   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${ticks(rec,null,c,n)}</tr>`});
- t+=`<tr><td colspan="${2+n}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
+   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${ticks(rec,null,c,n)}${overallCell(rec,null,c,null)}</tr>`});
+ t+=`<tr><td colspan="${4+n}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
  $('tgts').innerHTML=t+'</table>';
  document.querySelectorAll('.ct').forEach(grow);
  let note='';
- if(rec&&rec.results&&rec.ref_fails_each_rule){const miss=rec.rules.map((r,k)=>rec.ref_fails_each_rule[k]?null:'R'+(k+1)).filter(Boolean);
-  note=(miss.length?`<span class="warn">${esc(item.ref_system)} passes ${miss.join(', ')}: the rule does not catch the confirmed error.</span> `:'')
+ if(rec&&rec.results){const ro=overallOf(savedFor(rec,item.ref_system,null));
+  note=(ro=='pass'?`<span class="warn">${esc(item.ref_system)} passes all rules: they do not catch the confirmed error.</span> `:'')
    +`Verified with ${esc(rec.verified_with)} at ${esc(rec.saved_at)}.`+(freshFor(rec,item.ref_system,null)?'':' <span class="warn">Rules edited since; verify again.</span>')}
  $('vnote').innerHTML=note}
 function grow(el){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px'}
@@ -642,11 +652,12 @@ async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await
 async function verify(){const rules=rulesNow();if(!rules.length){$('msg').textContent='write at least one rule';return}
  $('vbtn').disabled=true;showErr('');const t0=Date.now();$('msg').textContent='verifying '+rules.length+' rule(s) × '+(1+Object.keys(item.others).length+contr.filter(c=>c.text.trim()).length)+' targets…';
  stopAutosave();const s=++seq;
- try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked});dirty=false;applyResp(r,s);
+ try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked,thinking:thinkingNow()});dirty=false;applyResp(r,s);
   const st=r.stats||{};$('msg').textContent=`verified and saved (${((Date.now()-t0)/1000).toFixed(1)} s; ${st.cached||0} from cache, ${st.asked||0} asked)`+(r.errors&&r.errors.length?', with errors':'');
   showErr([...(r.errors||[]),r.notice].filter(Boolean).join('\n\n'))}catch(e){$('msg').textContent='verification failed';showErr(e.message)}
  $('vbtn').disabled=false}
 $('rules').addEventListener('input',()=>{touch();if(item)renderRes(item.record)});$('flt').addEventListener('input',renderList);
+$('think').addEventListener('change',()=>{thinkTouched=true});
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='Enter'){e.preventDefault();verify()}
  if((e.ctrlKey||e.metaKey)&&e.key=='s'){e.preventDefault();save()}  // save at once (and no browser "save page" dialog)
  if(e.altKey&&e.key=='ArrowDown'){e.preventDefault();go(cur+1)}if(e.altKey&&e.key=='ArrowUp'){e.preventDefault();go(cur-1)}});
@@ -654,6 +665,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='Enter
 window.addEventListener('pagehide',()=>{if(dirty&&item)navigator.sendBeacon('/api/save',
  new Blob([JSON.stringify({i:cur,rules:rulesNow(),contrastive:contr})],{type:'application/json'}))});
 window.addEventListener('hashchange',()=>{const i=parseInt(location.hash.slice(1));if(!isNaN(i)&&i!==cur)go(i)});
+try{if(localStorage.getItem('instrOpen')==='0')$('instr').open=false}catch(e){}
+$('instr').addEventListener('toggle',()=>{try{localStorage.setItem('instrOpen',$('instr').open?'1':'0')}catch(e){}});
 (async()=>{items=await api('/api/items');buildGroups();go(Math.min(parseInt(location.hash.slice(1))||0,items.length-1))})();
 </script></body></html>"""
 
@@ -743,11 +756,11 @@ def make_handler(items, store, verifier, audio_roots):
                     self._audio(audio_path(self._item(int(parse_qs(u.query)["i"][0]))))
                 elif u.path == "/api/item":
                     it = self._item(int(parse_qs(u.query)["i"][0]))
-                    rec = store.records.get(it["key"])
+                    rec = store.view(it["key"])
                     if rec:  # older files: contrastive as plain strings
                         rec["contrastive"] = normalize_contrastive(rec.get("contrastive"), it)
-                    self._json({**it, "rules": store.rules(it["key"]), "backend_error": verifier.init_error, "has_audio": bool(audio_path(it)),
-                                "record": store.records.get(it["key"])})
+                    self._json({**it, "rules": store.rules(it["key"]), "backend_error": verifier.init_error, "default_thinking": verifier.thinking, "has_audio": bool(audio_path(it)),
+                                "record": store.view(it["key"])})
                 else:
                     self._send(404, "not found", "text/plain")
             except Exception as e:
@@ -773,12 +786,17 @@ def make_handler(items, store, verifier, audio_roots):
                                            "record": rec, "status": status(rec)}, 409)
                 elif self.path == "/api/verify":
                     t0 = time.time()
+                    # the "reasoning" tickbox: low or no; absent/null = the --enable-thinking default
+                    thinking = body.get("thinking") or DEFAULT
+                    if thinking is not DEFAULT and thinking not in THINKING_LEVELS:
+                        raise ValueError(f"unknown thinking level {thinking!r}")
                     try:
-                        results, errors, stats = verifier.verify(it, rules, contrastive,
-                                                                 use_cache=not body.get("no_cache"))
+                        results, errors, stats = verify_item(verifier, it, rules, contrastive,
+                                                             use_cache=not body.get("no_cache"),
+                                                             thinking=thinking)
                     except VerifyError as e:
                         return self._json({"error": str(e)}, 502)
-                    rec = store.put(it, rules, contrastive, results, verifier.model)
+                    rec = store.put(it, rules, contrastive, results, verifier.label(thinking))
                     print(f"{it['key']}: {len(rules)} rule(s) verified in {time.time() - t0:.1f}s "
                           f"({stats['cached']} cached, {stats['asked']} asked)", file=sys.stderr)
                     return self._json({"record": rec, "status": status(rec), "errors": errors, "stats": stats,
@@ -796,30 +814,29 @@ def make_handler(items, store, verifier, audio_roots):
 
 
 def main():
-    pre = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    pre.add_argument("--backend-module", default="llm_backend")
-    known, _ = pre.parse_known_args()
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    mod = importlib.import_module(known.backend_module)
-
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("data", help="annotated JSONL (targets with harm_spans, other_outputs)")
+    p.add_argument("data", help="confirmed harmful spans, JSONL (targets with harm_spans)")
+    p.add_argument("--systems", help="JSONL with the translations of all systems per segment "
+                                     "('text', 'systems_info'); matched to the data by document and audio. "
+                                     "Without it, the other systems come from 'other_outputs' in the data")
     p.add_argument("--output", "-o", required=True, help="JSONL with rules and verdicts (loaded if it exists)")
     p.add_argument("--rules", help="prefill rules from a verification_rules.jsonl")
-    p.add_argument("--prompt", help="verifier prompt file with {source}, {translation}, {rule}")
+    p.add_argument("--prompt", help="verifier prompt file with {rule}, {source_text}, {translation} "
+                                    "(default: the built-in prompt of llm_verifier.py)")
     p.add_argument("--audio-root", action="append", default=[],
                    help="directory the 'audio' paths are relative to (repeatable; tried after the "
                         "current directory and the directory of the data file)")
     p.add_argument("--cache", help="disk cache of LLM answers (default: <output>.llm-cache.jsonl)")
     p.add_argument("--no-cache", action="store_true", help="neither read nor write the cache")
+    p.add_argument("--no-startup-verify", action="store_true",
+                   help="do not verify all rules (saved and --rules) with the LLM before the server starts")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--backend-module", default="llm_backend",
-                   help="module with BackendConfig, add_arguments, get_backend (default: llm_backend)")
-    mod.add_arguments(p)
+    add_thinking_argument(p)
+    llm_backend.add_arguments(p)
     args = p.parse_args()
 
-    items = load_items(args.data)
+    items = load_items(args.data, load_systems(args.systems) if args.systems else None)
     if not items:
         sys.exit(f"no confirmed harm_spans in {args.data}")
     prefill = load_prefill(args.rules, items) if args.rules else {}
@@ -830,7 +847,11 @@ def main():
                 for it in items if it.get("audio"))
     print(f"audio found for {found}/{len(items)} spans" + ("" if found else
           "; set --audio-root to the directory the 'audio' paths are relative to"), file=sys.stderr)
-    verifier = Verifier(args, mod)
+    verifier = Verifier(llm_backend.BackendConfig.from_args(args), read_prompt(args.prompt),
+                        None if args.no_cache else (args.cache or os.path.splitext(args.output)[0] + ".llm-cache.jsonl"),
+                        thinking=args.enable_thinking)
+    if not args.no_startup_verify:
+        startup_verify(items, store, verifier, use_cache=not args.no_cache)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(items, store, verifier,
                                                          args.audio_root + [os.path.dirname(os.path.abspath(args.data))]))
     print(f"open http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}",
