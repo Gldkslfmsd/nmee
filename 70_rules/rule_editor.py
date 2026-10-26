@@ -2,7 +2,7 @@
 """Editor of verification rules for confirmed harmful spans, with an LLM verifier.
 
 For every human-confirmed harmful span (one editor item), the page shows
-  - the source (gold transcript) and the ASR the reference system translated,
+  - the audio and the source (gold transcript),
   - all target translations: the reference one (e.g. canary_cs) with the span highlighted,
     and the other systems (from --systems: every text in the target language; else other_outputs),
   - an editable box with one or more verification rules (one rule per line).
@@ -437,86 +437,14 @@ th{font-size:12px;color:var(--mute);font-weight:600}
 </style></head><body>
 <div id="side"><input id="flt" placeholder="filter: id, span or mark (- ! . x ?)" title="marks: - pending, ! in progress, . finished, x remove, ? undecidable"><div id="list"></div></div>
 <div id="main">
-<details id="instr" open><summary>Instructions</summary><div class="instr">
-<h3>Verification rules</h3>
-<p>Next, you’ll write verification rules that an AI will use to pass/fail translations. Your rule should be framed as generally as possible in testing
-the observed failure rather than hyper-specifically targeting particular wrong translations.</p>
-<ul>
-<li>Verification rules are targeting tricky things about your input. Together, your rules should check for what you think and observe could
-go wrong with translating it. They should certainly cover the issues you spotted with the models that you try in our interface, but they do
-not have to be limited to these issues. You can include a rule for something else you believe is tricky, even though the models you tried
-happened to get it right.</li>
-<li><b>Format:</b> Write a short instruction for an AI judge, e.g. “Check whether the translation conveys that the speaker feels no inner peace.”.
-The rule should clearly have a pass/fail conclusion. The verification rule should be written in English regardless of the source and target
-languages.</li>
-<li><b>Pass rate:</b> At most two automatic translations can pass your set of verification rules.</li>
-<li><b>Atomicity of your rule:</b> Each rule should only be checking for one conceptual issue. If you find yourself listing various separable conditions
-into a single rule, use multiple rules instead.</li>
-<li><b>Granularity of your rule:</b> Your verification rule should be specific enough to catch wrong translations but flexible enough to pass any
-reasonable correct phrasing.</li>
-<li>Accepted submissions typically have 1 or 2 focused rules rather than many generic ones. Good submissions also don’t contain rules that
-are passed by all or most models.</li>
-</ul>
-<h4>Examples</h4>
-<p>Example: The Chinese text “小猫在地上撒娇。” is translated as “The kitten is acting coquettishly on the ground.” which translates the
-concept of “playful cuteness” to “flirtatious cuteness”.<br>
-<i>Verification rule:</i> In this context, “撒娇” should be equivalent to acting cute and adorable, instead of having any flirtatious or sexual sense.</p>
-<p>Example: The Hindi sentence “जनाब एक होता हो लापड़ और उसक ऊपर होता हो झापड़ ” is translated literally as “Sir, there is one slap and on
-top of that there is slap.” while it’s actually commenting about the difference between two degrees of slapping, like a slap and a smack /
-bitch-slap.<br>
-<i>Verification rule:</i> The slap should not be prepositionally “above”, but rather in intensity.<br>
-<i>Verification rule:</i> The translations for both the slaps should be different, but close enough lexically.</p>
-<p>Example: The English text “Dissatisfied with EACL paper decisions? Fret not and submit your paper with ARR reviews to Multilingual
-Multicultural Evaluation workshop at EACL.” is translated as “Unzufrieden mit den EACL Papierentscheidungen? Machen Sie sich keine
-Sorgen und reichen Sie Ihre Arbeit mit ARR Rezensionen beim Multilingual Multicultural Evaluation Workshop der EACL ein.” which
-literally translates “paper” as “a piece of paper (Papier)”.<br>
-<i>Verification rule:</i> The word for “paper” should be “Artikel” or English loanword “Paper” but not “Papier”.</p>
-
-<h3>How to work in this editor, step by step</h3>
-<ol>
-<li><b>Pick a span</b> in the list on the left. The mark in front of it is its status: <code>-</code> pending, <code>!</code> in progress,
-<code>.</code> finished, <code>x</code> remove, <code>?</code> undecidable; type a mark or a word into the filter to find spans.
-Spans of the same segment are grouped (<code>├─</code> / <code>└─</code>), and the header then shows <span class="multi">span k / n</span>.</li>
-<li><b>Understand the input:</b> play the audio, read the source (gold transcript) and the ASR that the reference system translated.</li>
-<li><b>Find the error:</b> in the first row of the table, the reference translation, the confirmed harmful error is highlighted. Other confirmed
-spans of the same segment are underlined with dashes; they are separate items, write their rules there.</li>
-<li><b>Look at the other systems:</b> how does each of them render the same place? This shows what can go wrong, and what correct
-renderings look like.</li>
-<li><b>Write the rules</b> into the box, one rule per line (R1, R2, …). Rules suggested in advance may already be there: check, rewrite or
-delete them. Everything you type is saved automatically.</li>
-<li><b>Verify</b> (button or Ctrl+Enter). The AI judge checks every translation against every rule: ✓ pass, ✗ fail, ? the AI did not answer.
-Hover over a tick to see the rule and the verdict. <i>overall</i> is ✓ only if a translation passes all rules; <i>expected</i> shows that the
-reference must fail.</li>
-<li><b>Check the result and improve the rules:</b>
- <ul>
- <li>the reference must fail overall (its <i>overall</i> cell turns red if it does not): at least one rule has to catch the confirmed error;</li>
- <li>at most two automatic translations may pass overall;</li>
- <li>a rule that all or most translations pass is not useful;</li>
- <li>if a verdict looks wrong to you, make the rule clearer or more precise, and verify again.</li>
- </ul></li>
-<li><b>Add a contrastive translation</b> (+ add contrastive translation) if no system passes all rules: write a correct translation that should
-pass, verify, and check that it passes. You can also add a wrong variant to check that your rules catch it. The label in front of it
-can be renamed.</li>
-<li><b>Optional settings:</b> <i>reasoning</i> lets the AI think before it answers (slower, usually more careful); <i>ignore cache</i> asks the AI
-again instead of reusing its earlier answers.</li>
-<li><b>Mark the span</b> (mark as):
- <ul>
- <li><i>finished</i> when the rules are done; this needs at least one rule, current verdicts, the reference failing overall, and at least one
- translation passing overall (a system or a contrastive one);</li>
- <li><i>undecidable</i> if you cannot decide whether it is a harmful error, or how to write a rule for it;</li>
- <li><i>remove</i> if it is not a real harmful error, or if another span of the same segment already covers it.</li>
- </ul>
- Click a ticked button again to untick it.</li>
-<li><b>Go to the next span</b> (next →, or Alt+↓). The status at the top (pending / in progress / finished) is updated automatically.</li>
-</ol>
-<p class="msg">Click “Instructions” to fold or unfold this text.</p>
+<details id="instr" open><summary>Instructions (click to show/hide)</summary><div class="instr">
+__INSTRUCTIONS__
 </div></details>
  <div class="head"><div><b id="title"></b> <span class="msg" id="pos"></span></div>
   <div class="nav"><div class="trk" id="trk"><span data-s="pending">pending</span><span data-s="progress">in progress</span><span data-s="finished">finished</span></div>
    <button onclick="go(cur-1)">← prev</button><button onclick="go(cur+1)">next →</button></div></div>
  <audio id="aud" controls preload="none"></audio>
  <h2>Source (gold transcript)</h2><div class="box" id="src"></div>
- <h2>ASR given to <span id="refsys2"></span></h2><div class="box msg" id="asr"></div>
  <h2>Targets and verdicts</h2><div id="tgts"></div>
  <h2>Verification rules <span class="legend">— one rule per line (R1, R2, …); autosaved; Ctrl+Enter = verify</span></h2>
  <textarea id="rules" spellcheck="false"></textarea>
@@ -596,7 +524,7 @@ async function go(i){if(i<0||i>=items.length)return;
  cur=i;item=await api('/api/item?i='+i);dirty=false;location.hash=i;
  {const g=GROUP[i],n=g.length,k=g.indexOf(i)+1;
   $('title').innerHTML=esc(item.seg+' · '+item.ref_system+' · ')+(n>1?`<span class="multi">span ${k} / ${n}</span>`:'span 1 / 1')}$('pos').textContent=`${i+1} / ${items.length}`;
- $('src').textContent=item.source;$('asr').textContent=item.asr;$('refsys2').textContent=item.ref_system+' ('+(item.asr_system||'asr')+')';
+ $('src').textContent=item.source;
  const a=$('aud');a.pause();if(item.has_audio){a.src='/api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
  contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));
  $('rules').value=(item.rules||[]).join('\n');$('msg').textContent='';showErr(item.backend_error);initThinking(item.default_thinking);renderStatus();renderRes(item.record);renderList();
@@ -684,7 +612,22 @@ def dropped(old, rec, item, chosen=KEEP):
     return "No longer finished (back to in progress)" + (":\n- " + "\n- ".join(probs) if probs else ".")
 
 
-def make_handler(items, store, verifier, audio_roots):
+def read_instructions(path):
+    """The instructions fragment, read on every page load, so edits show after a reload."""
+    if not path:
+        return "<p class=\"msg\">No instructions (started with --instructions '').</p>"
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError as e:
+        return f"<p class=\"warn\">Cannot read the instructions file {html_escape(path)}: {html_escape(str(e))}</p>"
+
+
+def html_escape(t):
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def make_handler(items, store, verifier, audio_roots, instructions=None):
     def audio_path(it):
         """The item's audio file: as given, or relative to one of the roots."""
         a = it.get("audio")
@@ -748,7 +691,7 @@ def make_handler(items, store, verifier, audio_roots):
             u = urlparse(self.path)
             try:
                 if u.path == "/":
-                    self._send(200, PAGE, "text/html")
+                    self._send(200, PAGE.replace("__INSTRUCTIONS__", read_instructions(instructions)), "text/html")
                 elif u.path == "/api/items":
                     self._json([{"seg": it["seg"], "span": it["span"],
                                  "status": status(store.records.get(it["key"]))} for it in items])
@@ -830,6 +773,9 @@ def main():
     p.add_argument("--no-cache", action="store_true", help="neither read nor write the cache")
     p.add_argument("--no-startup-verify", action="store_true",
                    help="do not verify all rules (saved and --rules) with the LLM before the server starts")
+    p.add_argument("--instructions", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "instructions.html"),
+                   help="HTML fragment shown at the top of the page, read on every page load "
+                        "(default: instructions.html next to rule_editor.py; '' = none)")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     add_thinking_argument(p)
@@ -853,7 +799,8 @@ def main():
     if not args.no_startup_verify:
         startup_verify(items, store, verifier, use_cache=not args.no_cache)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(items, store, verifier,
-                                                         args.audio_root + [os.path.dirname(os.path.abspath(args.data))]))
+                                                         args.audio_root + [os.path.dirname(os.path.abspath(args.data))],
+                                                         args.instructions))
     print(f"open http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}",
           file=sys.stderr, flush=True)
     try:
