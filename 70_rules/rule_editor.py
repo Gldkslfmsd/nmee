@@ -504,7 +504,7 @@ const AUTOSAVE_MS=1500;
 function touch(){dirty=true;edits++;clearTimeout(timer);timer=setTimeout(autosave,AUTOSAVE_MS)}
 function stopAutosave(){clearTimeout(timer);timer=null}
 async function autosave(){stopAutosave();if(!dirty||!item)return;const at=edits,s=++seq,i=cur;
- try{const r=await api('/api/save',{i,rules:rulesNow(),contrastive:contr,confirmed:conf});
+ try{const r=await api('api/save',{i,rules:rulesNow(),contrastive:contr,confirmed:conf});
   if(i!==cur||s<applied)return;applied=s;
   items[cur].status=r.status;item.record=r.record;renderList();renderStatus();   // no re-render: keep the cursor where it is
   if(edits===at)dirty=false   // silent: only a failure is shown
@@ -519,7 +519,7 @@ function renderStatus(){const st=items[cur].status,ph=st=='pending'?'pending':st
 function applyResp(r,s){if(s!=null){if(s<applied)return;applied=s}contr=r.record.contrastive.map(c=>({...c}));conf={...(r.record.confirmed||{})};items[cur].status=r.status;item.record=r.record;
  renderRes(r.record);renderList();renderStatus()}
 async function decide(d){const st=items[cur].status,nd=st==d?null:d;showErr('');stopAutosave();const s=++seq;
- try{const r=await api('/api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd,confirmed:conf});dirty=false;applyResp(r,s);
+ try{const r=await api('api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd,confirmed:conf});dirty=false;applyResp(r,s);
   $('msg').textContent=nd?'marked as '+nd:'unticked: in progress';
   if(nd=='finished'&&GROUP[cur].length>1&&!r.notice)showErr("There are multiple spans in this segment. Check that the finished rules don't check the same span. If they do, remove one of them.",true);
   else showErr(r.notice,nd==null)}
@@ -555,11 +555,11 @@ function hl(text,s,e,others){ // highlight current span [s,e) and other confirme
  return out+esc(text.slice(p))}
 async function go(i){if(i<0||i>=items.length)return;
  if(dirty){await autosave();if(dirty&&!confirm('Your changes could not be saved (see the error). Leave anyway?'))return}
- cur=i;item=await api('/api/item?i='+i);dirty=false;location.hash=i;
+ cur=i;item=await api('api/item?i='+i);dirty=false;location.hash=i;
  {const g=GROUP[i],n=g.length,k=g.indexOf(i)+1;
   $('title').innerHTML=esc(item.seg+' · '+item.ref_system+' · ')+(n>1?`<span class="multi">span ${k} / ${n}</span>`:'span 1 / 1')}$('pos').textContent=`${i+1} / ${items.length}`;
  $('src').textContent=item.source;
- const a=$('aud');a.pause();if(item.has_audio){a.src='/api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
+ const a=$('aud');a.pause();if(item.has_audio){a.src='api/audio?i='+i;a.style.display=''}else{a.removeAttribute('src');a.style.display='none'}
  contr=((item.record&&item.record.contrastive)||[]).map(c=>({...c}));conf={...((item.record&&item.record.confirmed)||{})};
  $('rules').value=(item.rules||[]).join('\n');$('msg').textContent='';showErr(item.backend_error);initThinking(item.default_thinking);renderStatus();renderRes(item.record);renderList();
  document.querySelector('.it.cur')?.scrollIntoView({block:'nearest'})}
@@ -625,14 +625,14 @@ document.addEventListener('input',e=>{const el=e.target,j=+el.dataset.j;
  contr[j].text=el.value;touch();grow(el);
  el.closest('tr').querySelectorAll('td.r').forEach(td=>{td.className='r msg';td.textContent='·';td.removeAttribute('title')})});
 const rulesNow=()=>$('rules').value.split('\n').map(s=>s.trim()).filter(Boolean);
-async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
+async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('api/save',{i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
 // Verify: the server streams one line per verdict as soon as it is known (cached ones at once,
 // the others as the AI judge answers); the ticks are filled in as they come, then the saved record.
 let renderPending=false;
 function renderSoon(rec){if(renderPending)return;renderPending=true;
  requestAnimationFrame(()=>{renderPending=false;if(item)renderRes(rec)})}
 async function verifyStream(body,onVerdict){
- let resp;try{resp=await fetch('/api/verify_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+ let resp;try{resp=await fetch('api/verify_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
  catch(e){throw new Error('The editor server is not reachable ('+e.message+'). Is rule_editor.py still running?')}
  if(!resp.ok)throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
  const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
@@ -664,12 +664,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key=='Enter
  if((e.ctrlKey||e.metaKey)&&e.key=='s'){e.preventDefault();save()}  // save at once (and no browser "save page" dialog)
  if(e.altKey&&e.key=='ArrowDown'){e.preventDefault();go(cur+1)}if(e.altKey&&e.key=='ArrowUp'){e.preventDefault();go(cur-1)}});
 // closing or reloading the tab: send the last edits without waiting for an answer
-window.addEventListener('pagehide',()=>{if(dirty&&item)navigator.sendBeacon('/api/save',
+window.addEventListener('pagehide',()=>{if(dirty&&item)navigator.sendBeacon('api/save',
  new Blob([JSON.stringify({i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf})],{type:'application/json'}))});
 window.addEventListener('hashchange',()=>{const i=parseInt(location.hash.slice(1));if(!isNaN(i)&&i!==cur)go(i)});
 try{if(localStorage.getItem('instrOpen')==='0')$('instr').open=false}catch(e){}
 $('instr').addEventListener('toggle',()=>{try{localStorage.setItem('instrOpen',$('instr').open?'1':'0')}catch(e){}});
-(async()=>{items=await api('/api/items');buildGroups();go(Math.min(parseInt(location.hash.slice(1))||0,items.length-1))})();
+(async()=>{items=await api('api/items');buildGroups();go(Math.min(parseInt(location.hash.slice(1))||0,items.length-1))})();
 </script></body></html>"""
 
 
