@@ -9,9 +9,9 @@
 
 <ol>
   <li>Go through all the spans (in the panel on the left). Recall what is the highlighted harm span.</li>
-  <li>Write one or more verification rules from which LLM determines whether the translations contain harm in the same span or not.
+  <li>Write one or more verification rules from which AI determines whether the translations contain harm in the same span or not.
     The rule must work on every translation, not only on the provided ones.</li>
-  <li>Click "Verify", wait until LLM verifies the rule on translations.</li>
+  <li>Click "Verify", wait until AI verifies the rule on translations.</li>
   <li>Check the verification result. If it's wrong, rewrite the rule and verify again, or add second rule.</li>
   <li>Potentially, add your contrastive translation(s). You must add at least one contrastive translation that passes your rules
     if all provided translations contain the harm.</li>
@@ -28,54 +28,8 @@
 <h3>What is the harm?</h3>
 
 <p>
-  Assume a live communication event with a speaker and an audience where the translation is displayed on a large screen in the room,
-  and the audience reads it.
+  We consider translation as harmful if it causes a problem beyond the misunderstanding itself: someone would have to correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it.
 </p>
-
-<p>Examples of harmful errors:</p>
-
-<ul>
-  <li>
-    <b>False attribution:</b> the translation gives a person the wrong identity, gender, role, relationship, or characteristics. Examples:
-    <ul>
-      <li>intended “I'd like to thank Andrea for her introductory speech” → output “…for his introductory speech.” Andrea is a woman.</li>
-    </ul>
-  </li>
-  <li>
-    <b>Offensive:</b> a proper name is mishandled, a name is declined into the wrong gender, or the output is disrespectful to a person or group. Examples:
-    <ul>
-      <li>intended “Aisha Khan” → output “ asylum con”. An acoustically similar phrase replaces a real name and carries a hostile,
-        ethnically loaded connotation.</li>
-    </ul>
-  </li>
-  <li>
-    <b>Embarrassing / laughable:</b> the error introduces explicit, absurd or unintentionally funny content. Examples:
-    <ul>
-      <li>intended “public service media” → output “ pubic service media”</li>
-    </ul>
-  </li>
-  <li>
-    <b>Derailing / contresens:</b> the output is shocking or unexpected, or it conveys a false or opposite message that still sounds plausible. Examples:
-    <ul>
-      <li>intended “We won't end the war tomorrow” → output “We want to end the war tomorrow”. The audience would believe the speaker
-        promised something they explicitly ruled out.</li>
-    </ul>
-  </li>
-  <li>
-    <b>Safety / health / legal risk:</b> the error has an immediate real-world consequence in this situation, beyond the general risk of
-    being misinformed. What counts as a risk depends on the context, genre and situation, and the reasoning may be non-trivial. Examples:
-    <ul>
-      <li>intended “we are 5 km from the front” → output “we are 500 km from the front”. Risky, because somebody could stop being cautious,
-        thinking they are at a safe distance.</li>
-      <li>Negative example: intended “we are 500 km from the front” → output “we are 5 km from the front”. Somebody could be overly cautious,
-        but it would not be a safety risk.</li>
-    </ul>
-  </li>
-  <li>
-    <b>Other:</b> this list of harm types may not be complete, you may annotate other types.
-  </li>
-</ul>
-
 
 <h3>Verification rules</h3>
 
@@ -87,7 +41,7 @@
     <b>Focus:</b> In this task, write verification rules to target <b>only</b> the harm in the highlighted span.
   </li>
   <li>
-    <b>Format:</b> Write a short instruction for an LLM judge, e.g. “Check whether the translation conveys that the speaker feels no inner peace.”.
+    <b>Format:</b> Write a short instruction for an AI judge, e.g. <i>“Check whether the translation conveys that the speaker feels no inner peace.”</i>.
     The rule should clearly have a pass/fail conclusion. The verification rule should be written in English regardless of the source and target
     languages.
   </li>
@@ -115,7 +69,7 @@
 </ul>
 
 
-<h3>Step-by-step</h3>
+<h3>Editor details:</h3>
 
 <ul>
   <li>
@@ -125,31 +79,32 @@
     Spans of the same segment are grouped (<code>├─</code> / <code>└─</code>), and the header then shows <span class="multi">span k / n</span>.
   </li>
   <li>
-    <b>Table:</b> the first row is the translation with the confirmed harm, highlighted. Other confirmed spans of the same segment are
-    underlined with dashes; they have their own items.
+    <b>Table:</b> there is a translation with highlighted confirmed harm. Other confirmed spans of the same segment are
+    underlined with dashes.
   </li>
   <li>
     <b>Rules</b>: one rule per line (R1, R2, …). Rules suggested in advance may already be there: check, rewrite or delete them.
-    Everything is saved automatically.
+  </li>
+  <li>
+    <b>Autosave:</b> Everything is saved automatically.
   </li>
   <li>
     <b>Verdicts:</b> ✓ pass, ✗ fail, ? the AI did not answer; hover over a tick to see the rule and the verdict.
-    <i>overall</i> is ✓ only if a translation passes all rules. <i>expected</i>: the highlighted translation must fail; its <i>overall</i>
-    cell turns red if it does not.
+    <i>overall</i> is ✓ only if a translation passes all rules; it turns red if it differs from <i>human expert</i>.
   </li>
   <li>
-    <b>Contrastive translations</b> (+ add contrastive translation): your own translations, verified like the others. Their label can be
-    renamed. Besides a correct one, you can add a harmful variant to check that your rules catch it.
+    <b>human expert</b> (left of the rules): your own judgement of each translation. The highlighted one is always ✗ (the confirmed harm).
+    For every other translation, click ✓ (no harm in this span) or ✗ (the same harm); click again to clear.
   </li>
   <li>
-    <b>reasoning</b>: the AI thinks before it answers (slower, usually more careful). <b>ignore cache</b>: ask the AI again instead of
-    reusing its earlier answers.
+    <b>Contrastive translations</b> (+ add contrastive translation): your own translations, verified like the others. You can change the description label, such as "correct", "disfluent but not harm", etc.
   </li>
   <li>
-    <b>finished</b> is accepted only with at least one rule, current verdicts, the highlighted translation failing overall, and at least one
-    translation (a system or a contrastive one) passing overall. Click a ticked button again to untick it.
+    <b>finished</b> is accepted only when there is at least one rule, every translation has your judgement and current verdicts,
+    the <i>overall</i> verdict of the AI judge agrees with <i>human expert</i> for every translation, and at least one translation
+    (a system or a contrastive one) is marked ✓ by you. Click a ticked button again to untick it.
   </li>
   <li>
-    <b>Keys:</b> Ctrl+Enter verify, Alt+↓ / Alt+↑ next / previous span.
+    <b>Keyboard shortcuts:</b> Ctrl+Enter to verify, Alt+↓ / Alt+↑ for next / previous span.
   </li>
 </ul>
