@@ -150,14 +150,14 @@ def load_prefill(path, items):
 
 # ---------------------------------------------------------------------------- verifier
 
-def verify_item(verifier, item, rules, contrastive=(), use_cache=True, thinking=DEFAULT):
+def verify_item(verifier, item, rules, contrastive=(), use_cache=True, thinking=DEFAULT, on_verdict=None):
     """({target: [verdict per rule]}, [error messages], stats) for the reference, the other systems
     and the non-empty contrastive translations (under their labels) of an editor item.
     thinking: the level for these requests (DEFAULT: --enable-thinking)."""
     targets = {item["ref_system"]: item["ref_text"], **item["others"],
                **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
     return verifier.verify(item["source"], targets, rules, use_cache, dummy_fail={item["ref_system"]},
-                           thinking=thinking)
+                           thinking=thinking, on_verdict=on_verdict)
 
 
 def normalize_contrastive(raw, item):
@@ -361,9 +361,9 @@ def finish_problems(item, rec):
     out = []
     missing = [t for t in targets if conf[t] is None]
     if missing:
-        out.append(f"Choose pass or fail in the human expert column for: {', '.join(missing)}.")
+        out.append(f"Choose pass or fail in the 'Your judgement' column for: {', '.join(missing)}.")
     if not any(conf[t] == "pass" for t in targets):
-        out.append("No translation is marked pass in the human expert column. If all systems contain the harm, "
+        out.append("No translation is marked pass in the 'Your judgement' column. If all systems contain the harm, "
                    "add a contrastive translation without it, mark it pass, and verify.")
     stale = [t for t in targets if len(res.get(t) or []) != len(rules)]
     if stale:
@@ -371,11 +371,11 @@ def finish_problems(item, rec):
     done = [t for t in targets if t not in stale]
     unclear = [t for t in done if overall(res[t]) == "error"]
     if unclear:
-        out.append(f"Some overall verdicts are ? (LLM error) for {', '.join(unclear)}; verify again.")
-    wrong = [f"{t} (LLM judge: {overall(res[t])}, human expert: {conf[t]})" for t in done
+        out.append(f"Some overall verdicts are ? (AI judge error) for {', '.join(unclear)}; verify again.")
+    wrong = [f"{t} (AI judge: {overall(res[t])}, your judgement: {conf[t]})" for t in done
              if conf[t] and overall(res[t]) in ("pass", "fail") and overall(res[t]) != conf[t]]
     if wrong:
-        out.append("The overall verdict of the LLM judge differs from the human expert for: " + "; ".join(wrong)
+        out.append("The overall verdict of the AI judge differs from your judgement for: " + "; ".join(wrong)
                    + ". Change the rules (or your judgement) and verify.")
     return out
 
@@ -437,11 +437,11 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .tt textarea.ct{min-height:0;font:inherit;padding:5px 7px;resize:none;overflow:hidden}
 button.x{font-size:11.5px;padding:1px 7px;margin-top:4px;color:var(--mute)}
 .tt th.ov,.tt td.ov{border-left:2px solid var(--line);width:64px}
-.tt td.ov.bad{background:var(--failbg)}
+.tt td.ov.bad,.tt td.r.bad{background:var(--failbg)}
 .tt th.ex,.tt td.ex{border-left:2px solid var(--line);border-right:2px solid var(--line);width:84px;text-align:center;white-space:nowrap}
 .tt th.ex{font-weight:700;color:var(--ink);font-size:12.5px}.tt th.ex .sub{font-weight:400;color:var(--mute);font-size:11px}
 .tt td.ex.fixed{font-weight:700;color:var(--fail);font-size:15px}
-.tt th.grp{text-align:center;border-bottom:1px solid var(--line);font-size:11.5px}
+.tt th.grp{text-align:center;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap}
 button.cf{font-size:13px;font-weight:700;padding:1px 7px;margin:0 1px;color:var(--mute)}
 button.cf.pass.on{background:var(--pass);border-color:var(--pass);color:#fff}button.cf.fail.on{background:var(--fail);border-color:var(--fail);color:#fff}
 .ok{color:var(--pass)}.no{color:var(--fail)}.er{color:var(--err)}
@@ -479,13 +479,13 @@ __INSTRUCTIONS__
    <button onclick="go(cur-1)">← prev</button><button onclick="go(cur+1)">next →</button></div></div>
  <audio id="aud" controls preload="none"></audio>
  <h2>Source (gold transcript)</h2><div class="box" id="src"></div>
- <h2>Targets and verdicts</h2><div id="tgts"></div>
+ <h2>Translations and verdicts</h2><div id="tgts"></div>
  <h2>Verification rules <span class="legend">— one rule per line (R1, R2, …); autosaved; Ctrl+Enter = verify</span></h2>
  <textarea id="rules" spellcheck="false"></textarea>
  <div class="bar"><button class="p" id="vbtn" onclick="verify()">Verify</button>
   <span class="msg" id="msg"></span>
   <label class="msg" style="margin-left:auto" id="thinklab"><input type="checkbox" id="think"> reasoning</label>
-  <label class="msg" title="ask the LLM again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label></div>
+  <label class="msg" title="ask the AI judge again for every pair, and refresh the cache"><input type="checkbox" id="nocache"> ignore cache</label></div>
  <div class="bar"><span class="msg">mark as:</span>
   <button class="dec" data-d="remove" onclick="decide('remove')">remove</button>
   <button class="dec" data-d="undecidable" onclick="decide('undecidable')">undecidable</button>
@@ -568,26 +568,27 @@ function savedFor(rec,s,c){ // saved verdicts of system s, or of contrastive c (
  if(c){const o=(rec.contrastive||[]).find(o=>o.text===c.text);return o?rec.results[o.label]||null:null}
  return rec.results[s]||null}
 function freshFor(rec,s){return !!savedFor(rec,s,null)}
-function ticks(rec,s,c,n){let h='';const vs=savedFor(rec,s,c);
+function ticks(rec,s,c,n,expect){let h='';const vs=savedFor(rec,s,c);   // expect: your judgement, to compare a single rule with
  for(let k=0;k<n;k++){const v=vs?vs[k]:null;
   if(!v){h+='<td class="r msg">·</td>';continue}
   const [c,g]=v.verdict=='pass'?['ok','✓']:v.verdict=='fail'?['no','✗']:['er','?'];
-  h+=`<td class="r ${c}" title="${esc('R'+(k+1)+': '+rec.rules[k]+'\n\n'+v.verdict.toUpperCase()+(v.evidence?': '+v.evidence:'')+(v.raw?'\n\nraw: '+v.raw:''))}">${g}</td>`}
+  const bad=expect&&v.verdict!==expect;
+  h+=`<td class="r ${c}${bad?' bad':''}" title="${esc('R'+(k+1)+': '+rec.rules[k]+'\n\n'+v.verdict.toUpperCase()+(v.evidence?': '+v.evidence:'')+(v.raw?'\n\nraw: '+v.raw:''))}">${g}</td>`}
  return h}
-function overallOf(vs){if(!vs)return null;const v=vs.map(x=>x.verdict);
- return v.includes('fail')?'fail':v.includes('error')?'error':'pass'}
+function overallOf(vs){if(!vs)return null;const v=vs.map(x=>x?x.verdict:null);   // null: still being verified
+ return v.includes('fail')?'fail':v.includes(null)?null:v.includes('error')?'error':'pass'}
 const GLYPH={pass:['ok','✓'],fail:['no','✗'],error:['er','?']};
 function confCell(s,j){ // the "confirmed" column: fixed fail for the reference, pass/fail buttons for the others
  if(s===item.ref_system)return `<td class="ex fixed" title="the confirmed harmful error: always fail">✗</td>`;
  const v=j==null?conf[s]:contr[j].confirmed,a=j==null?`data-s="${esc(s)}"`:`data-j="${j}"`;
  return `<td class="ex">`+['pass','fail'].map(x=>`<button class="cf ${x}${v===x?' on':''}" ${a} data-v="${x}" `
-  +`title="human expert: ${x}${v===x?' (click again to clear)':''}">${GLYPH[x][1]}</button>`).join('')+`</td>`}
-function overallCell(rec,s,c,expect){ // overall verdict of the LLM judge (red if it differs from the human expert)
+  +`title="your judgement: ${x}${v===x?' (click again to clear)':''}">${GLYPH[x][1]}</button>`).join('')+`</td>`}
+function overallCell(rec,s,c,expect){ // overall verdict of the AI judge (red if it differs from your judgement)
  const o=overallOf(savedFor(rec,s,c)),ex='';
  if(!o)return `<td class="r ov msg">·</td>`;
  const [k,g]=GLYPH[o],bad=expect&&o!==expect;
- return `<td class="r ov ${k}${bad?' bad':''}" title="${o=='fail'?'fails at least one rule':o=='pass'?'passes all rules':'a verdict is an LLM error'}`
-  +`${expect?'; human expert: '+expect:''}">${g}</td>`+ex}
+ return `<td class="r ov ${k}${bad?' bad':''}" title="${o=='fail'?'fails at least one rule':o=='pass'?'passes all rules':'a verdict is an AI judge error'}`
+  +`${expect?'; your judgement: '+expect:''}">${g}</td>`+ex}
 document.addEventListener('click',e=>{const b=e.target.closest('button.cf');if(!b)return;
  const v=b.dataset.v;
  if(b.dataset.j!=null){const c=contr[+b.dataset.j];c.confirmed=c.confirmed===v?null:v}
@@ -596,18 +597,20 @@ document.addEventListener('click',e=>{const b=e.target.closest('button.cf');if(!
 function nRules(){return rulesNow().length||(item.record&&item.record.rules?item.record.rules.length:0)}
 function renderRes(rec){ // table: system | target | one tick per rule; human contrastive rows at the bottom
  const sys=[item.ref_system,...Object.keys(item.others)],n=nRules();
- let t='<table class="tt"><tr><th rowspan="2">system</th><th rowspan="2">target</th>'
-  +'<th rowspan="2" class="ex">human expert<br><span class="sub">(your judgement)</span></th>'
-  +`<th colspan="${n+1}" class="grp">LLM judge with your rules</th></tr><tr>`
-  +Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+'<th class="r ov">overall</th></tr>';
- for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${confCell(s,null)}${ticks(rec,s,null,n)}${overallCell(rec,s,null,s==item.ref_system?'fail':conf[s])}</tr>`;
+ const ov=n>1;   // with one rule, its verdict is the overall one: no separate overall column
+ let t='<table class="tt"><tr><th rowspan="2">system</th><th rowspan="2">translation</th>'
+  +'<th rowspan="2" class="ex">Your judgement</th>'
+  +`<th colspan="${n+(ov?1:0)}" class="grp">AI with rules</th></tr><tr>`
+  +Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+(ov?'<th class="r ov">overall</th>':'')+'</tr>';
+ for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${confCell(s,null)}${ticks(rec,s,null,n,ov?null:(s==item.ref_system?'fail':conf[s]))}${ov?overallCell(rec,s,null,s==item.ref_system?'fail':conf[s]):''}</tr>`;
  contr.forEach((c,j)=>{t+=`<tr><td class="sys"><input class="cl" data-j="${j}" value="${esc(c.label)}" title="label (editable)"><br><button class="x" onclick="delContr(${j})" title="remove this contrastive translation">remove</button></td>`
-   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${confCell(null,j)}${ticks(rec,null,c,n)}${overallCell(rec,null,c,c.confirmed)}</tr>`});
- t+=`<tr><td colspan="${4+n}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
+   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${confCell(null,j)}${ticks(rec,null,c,n,ov?null:c.confirmed)}${ov?overallCell(rec,null,c,c.confirmed):''}</tr>`});
+ t+=`<tr><td colspan="${3+n+(ov?1:0)}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
  $('tgts').innerHTML=t+'</table>';
  document.querySelectorAll('.ct').forEach(grow);
  let note='';
- if(rec&&rec.results){const ro=overallOf(savedFor(rec,item.ref_system,null));
+ if(rec&&rec.partial)note='Verifying… the ticks appear as the AI judge answers.';
+ else if(rec&&rec.results){const ro=overallOf(savedFor(rec,item.ref_system,null));
   note=(ro=='pass'?`<span class="warn">${esc(item.ref_system)} passes all rules: they do not catch the confirmed error.</span> `:'')
    +`Verified with ${esc(rec.verified_with)} at ${esc(rec.saved_at)}.`+(freshFor(rec,item.ref_system,null)?'':' <span class="warn">Rules edited since; verify again.</span>')}
  $('vnote').innerHTML=note}
@@ -623,12 +626,37 @@ document.addEventListener('input',e=>{const el=e.target,j=+el.dataset.j;
  el.closest('tr').querySelectorAll('td.r').forEach(td=>{td.className='r msg';td.textContent='·';td.removeAttribute('title')})});
 const rulesNow=()=>$('rules').value.split('\n').map(s=>s.trim()).filter(Boolean);
 async function save(){showErr('');stopAutosave();const s=++seq;try{const r=await api('/api/save',{i:cur,rules:rulesNow(),contrastive:contr,confirmed:conf});dirty=false;applyResp(r,s);$('msg').textContent='saved';showErr(r.notice)}catch(e){$('msg').textContent='not saved';showErr(e.message)}}
+// Verify: the server streams one line per verdict as soon as it is known (cached ones at once,
+// the others as the AI judge answers); the ticks are filled in as they come, then the saved record.
+let renderPending=false;
+function renderSoon(rec){if(renderPending)return;renderPending=true;
+ requestAnimationFrame(()=>{renderPending=false;if(item)renderRes(rec)})}
+async function verifyStream(body,onVerdict){
+ let resp;try{resp=await fetch('/api/verify_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+ catch(e){throw new Error('The editor server is not reachable ('+e.message+'). Is rule_editor.py still running?')}
+ if(!resp.ok)throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+ const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
+ for(;;){const {value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+  let k;while((k=buf.indexOf('\n'))>=0){const line=buf.slice(0,k).trim();buf=buf.slice(k+1);if(!line)continue;
+   const o=JSON.parse(line);
+   if(o.type==='verdict')onVerdict(o);else if(o.type==='error')throw new Error(o.error);else if(o.type==='done')return o}}
+ throw new Error('The connection to the editor server was lost during the verification.')}
 async function verify(){const rules=rulesNow();if(!rules.length){$('msg').textContent='write at least one rule';return}
- $('vbtn').disabled=true;showErr('');const t0=Date.now();$('msg').textContent='verifying '+rules.length+' rule(s) × '+(1+Object.keys(item.others).length+contr.filter(c=>c.text.trim()).length)+' targets…';
+ $('vbtn').disabled=true;showErr('');const t0=Date.now(),i=cur;
+ const tg=[item.ref_system,...Object.keys(item.others),...contr.filter(c=>c.text.trim()).map(c=>c.label)],total=tg.length*rules.length;
+ // the verdicts so far, shaped like a saved record, so that the table can show them
+ const part={partial:true,rules:[...rules],contrastive:contr.map(c=>({label:c.label,text:c.text})),results:{}};
+ tg.forEach(t=>part.results[t]=Array(rules.length).fill(null));
+ let got=0;$('msg').textContent=`verifying ${rules.length} rule(s) × ${tg.length} translations… 0 / ${total}`;renderRes(part);
  stopAutosave();const s=++seq;
- try{const r=await api('/api/verify',{i:cur,rules,contrastive:contr,no_cache:$('nocache').checked,thinking:thinkingNow(),confirmed:conf});dirty=false;applyResp(r,s);
+ try{const r=await verifyStream({i:cur,rules,contrastive:contr,no_cache:$('nocache').checked,thinking:thinkingNow(),confirmed:conf},o=>{
+   if(i!==cur||!part.results[o.target])return;
+   if(!part.results[o.target][o.rule])got++;part.results[o.target][o.rule]=o.verdict;
+   $('msg').textContent=`verifying ${rules.length} rule(s) × ${tg.length} translations… ${got} / ${total}`;renderSoon(part)});
+  if(i!==cur){$('vbtn').disabled=false;return}   // moved to another span meanwhile: it is saved; nothing to show here
+  dirty=false;applyResp(r,s);
   const st=r.stats||{};$('msg').textContent=`verified and saved (${((Date.now()-t0)/1000).toFixed(1)} s; ${st.cached||0} from cache, ${st.asked||0} asked)`+(r.errors&&r.errors.length?', with errors':'');
-  showErr([...(r.errors||[]),r.notice].filter(Boolean).join('\n\n'))}catch(e){$('msg').textContent='verification failed';showErr(e.message)}
+  showErr([...(r.errors||[]),r.notice].filter(Boolean).join('\n\n'))}catch(e){$('msg').textContent='verification failed';showErr(e.message);if(i===cur&&item)renderRes(item.record)}
  $('vbtn').disabled=false}
 $('rules').addEventListener('input',()=>{touch();if(item)renderRes(item.record)});$('flt').addEventListener('input',renderList);
 $('think').addEventListener('change',()=>{thinkTouched=true});
@@ -755,6 +783,46 @@ def make_handler(items, store, verifier, audio_roots, instructions=None):
             except Exception as e:
                 self._send(400, str(e), "text/plain")
 
+        def _verify_stream(self, it, rules, contrastive, confirmed, old, body):
+            """Verify, sending one JSON line per verdict as soon as it is known (NDJSON), then a
+            "done" line with the saved record (or an "error" line)."""
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")   # no buffering in a reverse proxy
+            self.end_headers()
+
+            def emit(o):
+                self.wfile.write((json.dumps(o, ensure_ascii=False) + "\n").encode("utf-8"))
+                self.wfile.flush()
+
+            try:
+                t0 = time.time()
+                thinking = body.get("thinking") or DEFAULT
+                if thinking is not DEFAULT and thinking not in THINKING_LEVELS:
+                    raise ValueError(f"unknown thinking level {thinking!r}")
+                try:
+                    results, errors, stats = verify_item(
+                        verifier, it, rules, contrastive, use_cache=not body.get("no_cache"), thinking=thinking,
+                        on_verdict=lambda s, k, v: emit({"type": "verdict", "target": s, "rule": k, "verdict": v}))
+                except VerifyError as e:
+                    return emit({"type": "error", "error": str(e)})
+                rec = store.put(it, rules, contrastive, results, verifier.label(thinking), confirmed=confirmed)
+                print(f"{it['key']}: {len(rules)} rule(s) verified in {time.time() - t0:.1f}s "
+                      f"({stats['cached']} cached, {stats['asked']} asked)", file=sys.stderr)
+                emit({"type": "done", "record": rec, "status": status(rec), "errors": errors,
+                      "stats": {"cached": stats.get("cached"), "asked": stats.get("asked")},
+                      "notice": dropped(old, rec, it)})
+            except (BrokenPipeError, ConnectionResetError):
+                pass   # the page was closed or reloaded; the verdicts are in the cache anyway
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                try:
+                    emit({"type": "error", "error": f"{type(e).__name__}: {e}"})
+                except OSError:
+                    pass
+
         def do_POST(self):
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -774,6 +842,8 @@ def make_handler(items, store, verifier, audio_roots, instructions=None):
                         probs = finish_problems(it, rec)
                         return self._json({"error": "Cannot mark as finished:\n- " + "\n- ".join(probs),
                                            "record": rec, "status": status(rec)}, 409)
+                elif self.path == "/api/verify_stream":
+                    return self._verify_stream(it, rules, contrastive, confirmed, old, body)
                 elif self.path == "/api/verify":
                     t0 = time.time()
                     # the "reasoning" tickbox: low or no; absent/null = the --enable-thinking default

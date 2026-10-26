@@ -375,7 +375,7 @@ class Verifier:
         except (Exception, SystemExit) as e:
             self.backend = None
             log = tee.text()
-            self.init_error = (f"Could not start the LLM backend {self.model}: {describe(e)}"
+            self.init_error = (f"Could not start the AI judge (backend {self.model}): {describe(e)}"
                                + (f"\n\n{log}" if log else ""))
             print(self.init_error, file=sys.stderr)
 
@@ -396,12 +396,14 @@ class Verifier:
         level = self.thinking if thinking is DEFAULT else thinking
         return self.model + (f" thinking={level}" if level and not self.dummy else "")
 
-    def answer(self, chats, use_cache=True, progress=None, thinking=DEFAULT):
+    def answer(self, chats, use_cache=True, progress=None, thinking=DEFAULT, on_answer=None):
         """(answers, stats, reasons): one answer string per chat (None = the request failed),
         {"cached": n, "asked": m, "from_cache": [bool per chat], "seconds": [seconds per chat]},
         and the failure messages of the backend. "seconds" is the time of the request (for a cached
         answer: of the request that produced it, if the cache knows it; else None).
         thinking: a level of --enable-thinking for these requests (DEFAULT: the Verifier's).
+        on_answer(index, answer): called as soon as an answer is known: at once for the cached ones,
+        then as the backend delivers them (one by one for API backends, per batch for vLLM).
         Raises VerifyError if the backend cannot be used or every request failed."""
         level = self.thinking if thinking is DEFAULT else thinking
         settings, extra = self.settings_for(level)
@@ -412,6 +414,10 @@ class Verifier:
                  "from_cache": [a is not None for a in answers],
                  "seconds": [self.cache.secs.get(k) if a is not None else None for k, a in zip(keys, answers)]}
         reasons = []
+        if on_answer:
+            for i, a in enumerate(answers):
+                if a is not None:
+                    on_answer(i, a)
         if progress:
             print(f"  {stats['cached']} of {len(chats)} pairs from the cache"
                   + (", nothing to ask" if not todo else ""), file=sys.stderr, flush=True)
@@ -439,12 +445,14 @@ class Verifier:
                         if pending:   # write every answer at once: stopping the run keeps all of them
                             self.cache.put_many(pending, self.model)
                             pending = []
+                        if on_answer:
+                            on_answer(todo[j], a)
                         if progress:
                             progress(done, len(todo), n_failed)
             except (Exception, SystemExit) as e:
                 self.cache.put_many(pending, self.model)
                 log = tee.text()
-                raise VerifyError(f"The LLM call failed: {describe(e)}" + (f"\n\n{log}" if log else ""))
+                raise VerifyError(f"The AI judge call failed: {describe(e)}" + (f"\n\n{log}" if log else ""))
             self.cache.put_many(pending, self.model)
         log = tee.text()
         # the API backends return None for a request that failed and print why on stderr
@@ -452,22 +460,34 @@ class Verifier:
         reasons = [r.strip() for r in re.findall(r"WARNING: request failed: (.*?)(?=WARNING:|\n|$)", log)]
         failed = sum(a is None for a in new)
         if failed == len(chats):
-            raise VerifyError(f"All {failed} LLM requests failed.\n\n"
+            raise VerifyError(f"All {failed} AI judge requests failed.\n\n"
                               + (summarize_reasons(reasons) or log or "no details from the backend"))
         for i, a in zip(todo, new):
             answers[i] = a
         return answers, stats, reasons
 
-    def verify(self, source, targets, rules, use_cache=True, dummy_fail=(), progress=None, thinking=DEFAULT):
+    def verify(self, source, targets, rules, use_cache=True, dummy_fail=(), progress=None, thinking=DEFAULT,
+               on_verdict=None):
         """({target: [verdict per rule]}, [error messages], stats) for {target: translation}.
-        dummy_fail: the targets the dummy backend fails (it passes all others)."""
+        dummy_fail: the targets the dummy backend fails (it passes all others).
+        on_verdict(target, rule index, verdict): called for every verdict as soon as it is known."""
         jobs = [(s, k) for s in targets for k in range(len(rules))]
+
+        def tell(i, a):
+            if on_verdict:
+                v = parse_verdict(a)
+                if a is None:
+                    v["evidence"] = "request failed"
+                on_verdict(jobs[i][0], jobs[i][1], v)
+
         if self.dummy:
             answers = ["fail" if s in dummy_fail else "pass" for s, _ in jobs]
             stats, reasons = {"cached": 0, "asked": len(jobs)}, []
+            for i, a in enumerate(answers):
+                tell(i, a)
         else:
             chats = [self.chat(source, targets[s], rules[k]) for s, k in jobs]
-            answers, stats, reasons = self.answer(chats, use_cache, progress, thinking)
+            answers, stats, reasons = self.answer(chats, use_cache, progress, thinking, on_answer=tell)
         res = {s: [None] * len(rules) for s in targets}
         for (s, k), a in zip(jobs, answers):
             v = parse_verdict(a)
@@ -484,10 +504,10 @@ def verdict_errors(res, n_jobs, reasons=()):
     n_failed = sum(v["verdict"] == "error" and v["evidence"] != "unparsable answer" for v in vs)
     unparsed = [v for v in vs if v["verdict"] == "error" and v["evidence"] == "unparsable answer"]
     if n_failed:
-        errors.append(f"{n_failed} of {n_jobs} LLM requests failed (marked ?)."
+        errors.append(f"{n_failed} of {n_jobs} AI judge requests failed (marked ?)."
                       + (f"\n{summarize_reasons(reasons)}" if reasons else ""))
     if unparsed:
-        errors.append(f"{len(unparsed)} LLM answer(s) had no pass/fail verdict (marked ?). "
+        errors.append(f"{len(unparsed)} AI judge answer(s) had no pass/fail verdict (marked ?). "
                       f"First one:\n{(unparsed[0].get('raw') or '')[:1500]}")
     return errors
 

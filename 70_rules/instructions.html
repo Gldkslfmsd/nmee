@@ -5,21 +5,22 @@
   Available styles: <h3>, <h4>, <p>, <ul>/<ol>/<li>, <b>, <i>, <code>, <span class="multi"> (red).
 -->
 
-<h3>In brief</h3>
+<h3>Step by step, in brief</h3>
 
 <ol>
   <li>Go through all the spans (in the panel on the left). Recall what is the highlighted harm span.</li>
+  <li>Mark your judgment on each translation, pass or fail, depending on whether it contains the highlighted harm.</li>
   <li>Write one or more verification rules from which AI determines whether the translations contain harm in the same span or not.
     The rule must work on every translation, not only on the provided ones.</li>
   <li>Click "Verify", wait until AI verifies the rule on translations.</li>
-  <li>Check the verification result. If it's wrong, rewrite the rule and verify again, or add second rule.</li>
-  <li>Potentially, add your contrastive translation(s). You must add at least one contrastive translation that passes your rules
-    if all provided translations contain the harm.</li>
-  <li>Finish the segment:
+  <li>Check the verification result. If it is other than your judgment, rewrite the rule and verify again, or add additional rule.</li>
+  <li>Potentially, add your contrastive translation(s). You must add at least one contrastive translation without the harm if all provided translations contain the harm. 
+  </li>
+  <li>Mark the span as:
     <ul>
-      <li>"finished" if the rules are done, all translation pass/fail correctly.</li>
-      <li>"undecidable" if you cannot decide the segment, e.g. when you think there is no harm in the highlighted span.</li>
-      <li>"remove" if e.g. if this span covers the same error in the same content as another span.</li>
+      <li><b>finished</b> if your judgements are done, your rules are done, all translation pass/fail correctly.</li>
+      <li><b>undecidable</b> if you cannot decide the segment, e.g. when you think there is no harm in the highlighted span.</li>
+      <li><b>remove</b> if you are sure that this span should not be included in the evaluation benchmark, e.g. if another span in the same segment covers the same error as this span.</li>
     </ul>
   </li>
 </ol>
@@ -28,7 +29,8 @@
 <h3>What is the harm?</h3>
 
 <p>
-  We consider translation as harmful if it causes a problem beyond the misunderstanding itself: someone would have to correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it.
+  We consider translation as harmful if it causes a problem beyond the misunderstanding itself: someone would have to correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it. 
+  (Recall the full definition in other document of this project.)
 </p>
 
 <h3>Verification rules</h3>
@@ -51,10 +53,10 @@
   </li>
   <li>
     <b>Granularity:</b> Your verification rule should be specific enough to catch harmful translations but flexible enough to pass any
-    unharmful phrasing.
+    harmless phrasing.
   </li>
   <li>
-    <b>Correctness:</b> Overall result is pass if all rules pass, and fail if any rule fails. 
+    Overall result is pass if all rules pass, and fail if any rule fails. 
   </li>
 </ul>
 
@@ -62,14 +64,13 @@
 
 <ul>
   <li><i>The company name is "Aptar".</i></li>
-  <li><i>The person last name is "Hajde".</i></li>
-  <li><i>The person "Andrea" is male gender.</i></li>
-  <li><i>The person name is "Vik", it may be spelled as "Vic". Inflected form such as "pro Vika" is fine.</i></li>
-  <li><i>There is nothing about that the rate is "interest" ("úroková").</i></li>
+  <li><i>This person "Andrea" is male.</i></li>
+  <li><i>The person's name is "Vik", it may be spelled as "Vic". Inflected form such as "pro Vika" is fine.</i></li>
+  <li><i>The translation does not say that the rate is "interest" ("úroková").</i></li>
 </ul>
 
 
-<h3>Editor details:</h3>
+<h3>Editor details</h3>
 
 <ul>
   <li>
@@ -90,20 +91,21 @@
   </li>
   <li>
     <b>Verdicts:</b> ✓ pass, ✗ fail, ? the AI did not answer; hover over a tick to see the rule and the verdict.
-    <i>overall</i> is ✓ only if a translation passes all rules; it turns red if it differs from <i>human expert</i>.
+    <i>overall</i> is ✓ only if a translation passes all rules; it turns red if it differs from <i>your judgements</i>.
   </li>
   <li>
-    <b>human expert</b> (left of the rules): your own judgement of each translation. The highlighted one is always ✗ (the confirmed harm).
+    <b>Your judgement</b>: The translation with the confirmed harm is always marked with ✗, you can not change it.
     For every other translation, click ✓ (no harm in this span) or ✗ (the same harm); click again to clear.
   </li>
   <li>
-    <b>Contrastive translations</b> (+ add contrastive translation): your own translations, verified like the others. You can change the description label, such as "correct", "disfluent but not harm", etc.
+    <b>Contrastive translations</b>: your translations, verified like the others. You can change the description label.
   </li>
-  <li>
-    <b>finished</b> is accepted only when there is at least one rule, every translation has your judgement and current verdicts,
-    the <i>overall</i> verdict of the AI judge agrees with <i>human expert</i> for every translation, and at least one translation
+<!--  <li>
+    <b>Finished</b> is accepted only when there is at least one rule, every translation has your judgement and up to date verdicts,
+    the <i>overall</i> verdict of the AI judge agrees with <i>your judgements</i> for every translation, and at least one translation
     (a system or a contrastive one) is marked ✓ by you. Click a ticked button again to untick it.
   </li>
+-->
   <li>
     <b>Keyboard shortcuts:</b> Ctrl+Enter to verify, Alt+↓ / Alt+↑ for next / previous span.
   </li>
