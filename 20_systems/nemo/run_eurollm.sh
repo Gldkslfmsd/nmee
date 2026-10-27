@@ -2,7 +2,7 @@
 source p3.12/bin/activate
 base=../../outputs/earnings-25/nemo_streaming
 for lat in low high ; do
-    for lang in fr cs; do
+    for lang in fr cs pl; do
       out="$base/$lang/asr-$lat+EuroLLM-9B"
       mkdir -p "$out"
       python3 nemo_streaming_llm.py -t $lang \
