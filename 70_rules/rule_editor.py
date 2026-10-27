@@ -152,10 +152,10 @@ def load_prefill(path, items):
 
 def verify_item(verifier, item, rules, contrastive=(), use_cache=True, thinking=DEFAULT, on_verdict=None):
     """({target: [verdict per rule]}, [error messages], stats) for the reference, the other systems
-    and the non-empty contrastive translations (under their labels) of an editor item.
+    and the contrastive translations (under their labels, empty ones too) of an editor item.
     thinking: the level for these requests (DEFAULT: --enable-thinking)."""
     targets = {item["ref_system"]: item["ref_text"], **item["others"],
-               **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
+               **{c["label"]: c["text"] for c in contrastive}}
     return verifier.verify(item["source"], targets, rules, use_cache, dummy_fail={item["ref_system"]},
                            thinking=thinking, on_verdict=on_verdict)
 
@@ -280,7 +280,7 @@ def startup_verify(items, store, verifier, use_cache=True):
             continue
         contrastive = normalize_contrastive((rec or {}).get("contrastive"), it)
         targets = {it["ref_system"]: it["ref_text"], **it["others"],
-                   **{c["label"]: c["text"] for c in contrastive if c["text"].strip()}}
+                   **{c["label"]: c["text"] for c in contrastive}}
         todo.append((it, rec, rules, contrastive, targets))
     if not todo:
         return
@@ -382,15 +382,25 @@ def finish_problems(item, rec):
 
 def confirmations(item, rec):
     """{translation: 'pass'|'fail'|None}: the reference is fail (the confirmed harm); the other
-    systems and the non-empty contrastive translations have the annotator's choice (None = not yet)."""
+    systems and the contrastive translations (empty ones too) have the annotator's choice (None = not yet)."""
     sysconf = rec.get("confirmed") or {}
     out = {item["ref_system"]: "fail"}
     for s in item["others"]:
         out[s] = sysconf.get(s)
     for c in rec.get("contrastive") or []:
-        if c["text"].strip():
-            out[c["label"]] = c.get("confirmed")
+        out[c["label"]] = c.get("confirmed")
     return out
+
+
+def empty_contrastive(rec):
+    """A warning (not a reason to refuse finished) if some contrastive translations are empty."""
+    empty = [c["label"] for c in rec.get("contrastive") or [] if not c["text"].strip()]
+    if not empty:
+        return None
+    return (f"Warning: the contrastive translation {', '.join(empty)} is empty. It was verified as an empty "
+            "translation." if len(empty) == 1 else
+            f"Warning: the contrastive translations {', '.join(empty)} are empty. They were verified as empty "
+            "translations.")
 
 
 def overall(verdicts):
@@ -521,7 +531,8 @@ function applyResp(r,s){if(s!=null){if(s<applied)return;applied=s}contr=r.record
 async function decide(d){const st=items[cur].status,nd=st==d?null:d;showErr('');stopAutosave();const s=++seq;
  try{const r=await api('api/decide',{i:cur,rules:rulesNow(),contrastive:contr,decision:nd,confirmed:conf});dirty=false;applyResp(r,s);
   $('msg').textContent=nd?'marked as '+nd:'unticked: in progress';
-  if(nd=='finished'&&GROUP[cur].length>1&&!r.notice)showErr("There are multiple spans in this segment. Check that the finished rules don't check the same span. If they do, remove one of them.",true);
+  const notes=[r.warning,nd=='finished'&&GROUP[cur].length>1?"There are multiple spans in this segment. Check that the finished rules don't check the same span. If they do, remove one of them.":null].filter(Boolean);
+  if(notes.length&&!r.notice)showErr(notes.join('\n\n'),true);
   else showErr(r.notice,nd==null)}
  catch(e){$('msg').textContent='not marked';showErr(e.message);if(e.data&&e.data.record){dirty=false;applyResp(e.data)}}}
 async function api(p,body){let r;
@@ -604,7 +615,7 @@ function renderRes(rec){ // table: system | target | one tick per rule; human co
   +Array.from({length:n},(_,k)=>`<th class="r">R${k+1}</th>`).join('')+(ov?'<th class="r ov">overall</th>':'')+'</tr>';
  for(const s of sys)t+=`<tr><td class="sys">${esc(s)}</td><td>${s==item.ref_system?hl(item.ref_text,item.span_start,item.span_end,item.other_spans):esc(item.others[s])}</td>${confCell(s,null)}${ticks(rec,s,null,n,ov?null:(s==item.ref_system?'fail':conf[s]))}${ov?overallCell(rec,s,null,s==item.ref_system?'fail':conf[s]):''}</tr>`;
  contr.forEach((c,j)=>{t+=`<tr><td class="sys"><input class="cl" data-j="${j}" value="${esc(c.label)}" title="label (editable)"><br><button class="x" onclick="delContr(${j})" title="remove this contrastive translation">remove</button></td>`
-   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="human contrastive translation">${esc(c.text)}</textarea></td>${confCell(null,j)}${ticks(rec,null,c,n,ov?null:c.confirmed)}${ov?overallCell(rec,null,c,c.confirmed):''}</tr>`});
+   +`<td><textarea class="ct" data-j="${j}" rows="2" placeholder="your contrastive translation">${esc(c.text)}</textarea></td>${confCell(null,j)}${ticks(rec,null,c,n,ov?null:c.confirmed)}${ov?overallCell(rec,null,c,c.confirmed):''}</tr>`});
  t+=`<tr><td colspan="${3+n+(ov?1:0)}"><button onclick="addContr()">+ add contrastive translation</button></td></tr>`;
  $('tgts').innerHTML=t+'</table>';
  document.querySelectorAll('.ct').forEach(grow);
@@ -643,7 +654,7 @@ async function verifyStream(body,onVerdict){
  throw new Error('The connection to the editor server was lost during the verification.')}
 async function verify(){const rules=rulesNow();if(!rules.length){$('msg').textContent='write at least one rule';return}
  $('vbtn').disabled=true;showErr('');const t0=Date.now(),i=cur;
- const tg=[item.ref_system,...Object.keys(item.others),...contr.filter(c=>c.text.trim()).map(c=>c.label)],total=tg.length*rules.length;
+ const tg=[item.ref_system,...Object.keys(item.others),...contr.map(c=>c.label)],total=tg.length*rules.length;
  // the verdicts so far, shaped like a saved record, so that the table can show them
  const part={partial:true,rules:[...rules],contrastive:contr.map(c=>({label:c.label,text:c.text})),results:{}};
  tg.forEach(t=>part.results[t]=Array(rules.length).fill(null));
@@ -864,7 +875,9 @@ def make_handler(items, store, verifier, audio_roots, instructions=None):
                 else:
                     return self._send(404, "not found", "text/plain")
                 chosen = (body.get("decision") or None) if self.path == "/api/decide" else KEEP
-                self._json({"record": rec, "status": status(rec), "notice": dropped(old, rec, it, chosen)})
+                warning = empty_contrastive(rec) if rec.get("decision") == "finished" and chosen == "finished" else None
+                self._json({"record": rec, "status": status(rec), "notice": dropped(old, rec, it, chosen),
+                            "warning": warning})
             except Exception as e:
                 import traceback
                 traceback.print_exc()
