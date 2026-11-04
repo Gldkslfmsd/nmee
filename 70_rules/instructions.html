@@ -5,9 +5,19 @@
   Available styles: <h3>, <h4>, <p>, <ul>/<ol>/<li>, <b>, <i>, <code>, <span class="multi"> (red).
 -->
 
+<style>
+  .harm { background: #ffa6a6; color: #1d1d1b; padding: 0 2px; border-radius: 3px; }
+  @media (prefers-color-scheme: dark) {
+    .harm { background: #7a2a2a; color: #ececea; }
+  }
+</style>
+
 <p>
-  For each highlighted harmful span, judge whether the translations contain the same harm, and write
-  verification rules with which the AI judge determines it.
+  We have selected speech translation segments: audio, transcript, and multiple
+  independent translations.  Human experts have confirmed and highlighted harmful error spans
+  in some translations. Your task is to verify whether the other translations
+  contain harmful errors in spans corresponding to the highlighted ones,
+  and to write verification rules for the AI judge to determine it.
 </p>
 
 
@@ -16,9 +26,131 @@
 <p>
   We consider translation harmful if it causes a problem beyond the misunderstanding itself: someone would have to
   correct it or apologise for it, be offended or embarrassed by it, laugh at it, or be at risk if they acted on it.
-  (Recall the full definition in another document of this project.)
 </p>
 
+
+<details>
+  <summary><b>Full definition</b> (click to show/hide)</summary>
+  <div style="margin-left: 1.5em; padding-left: 0.8em; border-left: 3px solid #ccc;">
+  <p>
+    You can assume a live communication event with a speaker and an audience where the translation is displayed
+    on a large screen in the room, and the audience reads it.
+  </p>
+
+  <h3>Example situation</h3>
+
+  <p>
+    The conference “Média a Ukrajina” (Media and Ukraine) took place in Prague on June 22, 2023. The main topic was
+    the role of public-service media in the war in Ukraine. Among the speakers were the Czech President Petr Pavel
+    and the Kyiv mayor Vitali Klitschko. The programme was also broadcasted on Czech Radio.
+  </p>
+
+  <h3>Examples of harmful errors</h3>
+
+  <p>
+    <b>False attribution:</b> the translation gives a person the wrong identity, gender, role, relationship, or
+    characteristics. Examples:
+  </p>
+  <ul>
+    <li>
+      intended “I'd like to thank Andrea for <b>her</b> introductory speech” → output “…for
+      <span class="harm">his</span> introductory speech.” Andrea is a woman.
+    </li>
+  </ul>
+
+  <p>
+    <b>Offensive:</b> a proper name is mishandled, a name is declined into the wrong gender, or the output is
+    disrespectful to a person or group. Examples:
+  </p>
+  <ul>
+    <li>
+      intended “Aisha Khan” → output “<span class="harm">asylum con</span>”. An acoustically similar
+      phrase replaces a real name and carries a hostile, ethnically loaded connotation.
+    </li>
+  </ul>
+
+  <p>
+    <b>Embarrassing / laughable:</b> the error introduces explicit, absurd or unintentionally funny content. Examples:
+  </p>
+  <ul>
+    <li>
+      intended “public service media” → output “<span class="harm">pubic</span> service media”
+    </li>
+  </ul>
+
+  <p>
+    <b>Derailing / contresens:</b> the output is shocking or unexpected, or it conveys a false or opposite message
+    that still sounds plausible. Examples:
+  </p>
+  <ul>
+    <li>
+      intended “We won't end the war tomorrow” → output “We <span class="harm">want</span> to end the
+      war tomorrow”. The audience would believe the speaker promised something they explicitly ruled out.
+    </li>
+  </ul>
+
+  <p>
+    <b>Safety / health / legal risk:</b> the error has an immediate real-world consequence in this situation, beyond
+    the general risk of being misinformed. What counts as a risk depends on the context, genre and situation, and the
+    reasoning may be non-trivial. Examples:
+  </p>
+  <ul>
+    <li>
+      intended “we are 5 km from the front” → output “we are <span class="harm">500</span> km from the
+      front”. Risky, because somebody could stop being cautious, thinking they are at a safe distance.
+    </li>
+    <li>
+      <i>Negative example:</i> intended “we are 500 km from the front” → output “we are
+      <span class="harm">5</span> km from the front”. Somebody could be overly cautious, but it would
+      not be a safety risk.
+    </li>
+  </ul>
+
+  <p>
+    <b>Other:</b> this list of harm types may not be complete, you may annotate other types.
+  </p>
+</div>
+</details>
+
+
+
+<h4>Example</h4>
+
+<p>Source: <i>Thanks, Matt!</i></p>
+
+
+<table>
+  <tr>
+    <th>Translations (Czech)</th>
+    <th>Gloss</th>
+    <th>Verdict</th>
+    <th>Explanation</th>
+  </tr>
+  <tr>
+    <td><i>Díky, <mark>Matta</mark>!</i></td>
+    <td><i>Thanks, Matta!</i></td>
+    <td>harm = ✗</td>
+    <td>"Matta" is a wrong female inflected form of "Matt". The harm is the wrong female attribute.</td>
+  </tr>
+  <tr>
+    <td><i>Díky, Matte!</i></td>
+    <td><i>Thanks, Matt!</i></td>
+    <td>no harm = ✓</td>
+    <td>"Matte" is the correct inflected form of "Matt".</td>
+  </tr>
+  <tr>
+    <td><i>Ahoj, Matte!</i></td>
+    <td><i>Hi, Matt!</i></td>
+    <td>no harm = ✓</td>
+    <td>"Matte" is translated correctly; "Hi" is wrong but it is a different span.</td>
+  </tr>
+  <tr>
+    <td><i>Díky, Pat!</i></td>
+    <td><i>Thanks, Pat!</i></td>
+    <td>harm = ✗</td>
+    <td>"Pat" is a wrong name.</td>
+  </tr>
+</table>
 
 <h3>Step by step</h3>
 
@@ -27,12 +159,12 @@
 </p>
 
 <ol>
-  <li>Listen to the audio, read the source and find the <mark>highlighted</mark> harmful span.</li>
-  <li>Mark <b>Your judgement</b> for each translation: ✓ if it does not contain the highlighted harm, ✗ if it contains the same harm.</li>
+  <li>Listen to the audio, read the source and find the <mark>highlighted</mark> harmful span in the first translation(s).</li>
+  <li>There are other multiple translations. Mark <b>Your judgement</b> for them: ✓ if it does not contain harm corresponding to the highlighted one, ✗ if it contains the same harm.</li>
+  <li>If all provided translations contain the harm, write at least one contrastive translation without the harm.</li>
   <li>Write one or more verification rules for the highlighted harm. The rules must work on every translation, not only on the provided ones.</li>
   <li>Click <b>Verify</b> and wait until the AI judge has verified the rules on all translations.</li>
-  <li>Where the AI judge's verdict differs from your judgement, rewrite a rule or add a second one, and verify again.</li>
-  <li>If all provided translations contain the harm, add at least one contrastive translation without the harm.</li>
+  <li>Where the AI judge's verdict differs from your judgement, rewrite a rule or add additional one. Then verify again.</li>
   <li>When done, mark the span as:
     <ul>
       <li><b>finished</b></li>
@@ -48,8 +180,7 @@
 
 <ul>
   <li>
-    Write a short instruction for an AI judge.
-    The rule should clearly have a pass/fail conclusion.
+    Write a short instruction for AI judge. The rule should clearly have a pass/fail conclusion.
   </li>
   <li>
     In this task, write verification rules to target <b>only</b> the harm in the <mark>highlighted</mark> span.
