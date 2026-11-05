@@ -17,7 +17,8 @@
   independent translations.  Human experts have confirmed and highlighted harmful error spans
   in some translations. Your task is to verify whether the other translations
   contain harmful errors in spans corresponding to the highlighted ones,
-  and to write verification rules for the AI judge to determine it.
+  and to write verification rules for the AI judge to determine harm in any translation. 
+  The result will be a benchmark for evaluating translation systems on the selected cases.
 </p>
 
 
@@ -113,81 +114,79 @@
 </details>
 
 
+<h3>Step by step</h3>
 
-<h4>Example</h4>
+<ol>
+  <li>Listen to the audio, read the source and find the <mark>highlighted</mark> harmful span in the first translation(s).</li>
+  <li>There are other multiple translations. Mark <b>Your judgement</b> for their spans corresponding to the highlighted one: ✓ harmless, ✗ harmful.</li>
+  <li>If all provided translations are ✗ harmful, write at least one <b>contrastive translation</b> that is ✓ harmless.</li>
+  <li>Write one or more verification rules for the highlighted harm. The rules must work on every translation, not only on the provided ones.</li>
+  <li>Click <b>Verify</b> and wait until the AI judge has verified the rules on all translations.</li>
+  <li>Where the AI judge's verdict differs from your judgement, rewrite a rule or add additional one. Then verify again.</li>
+  <li>In the end, mark the span as:
+    <ul>
+      <li><b>finished</b></li>
+      <li><b>undecidable</b></li>
+      <li><b>remove</b>: this option is especially for duplicates. There may be multiple highlighted spans in translations of the same source (grouped in the left panel, titled as <span class="multi">span 1 / 2</span>).
+  If you consider them duplicate, such as two parts of single expression, finish one of them and mark the others as <b>remove</b>. They will be excluded from the final collection.
+</li>
+    </ul>
+  </li>
+</ol>
+
+<h3>Example: harmless vs. harmful</h3>
 
 <p>Source: <i>Thanks, Matt!</i></p>
-
 
 <table>
   <tr>
     <th>Translations (Czech)</th>
     <th>Gloss</th>
-    <th>Verdict</th>
+    <th>Judgement</th>
     <th>Explanation</th>
   </tr>
   <tr>
     <td><i>Díky, <mark>Matta</mark>!</i></td>
     <td><i>Thanks, Matta!</i></td>
-    <td>harm = ✗</td>
-    <td>"Matta" is a wrong female inflected form of "Matt". The harm is the wrong female attribute.</td>
+    <td>✗ harmful</td>
+    <td>"Matta" is a wrong inflected form of "Matt" that make it female. The harm is false female attribute.</td>
   </tr>
   <tr>
     <td><i>Díky, Matte!</i></td>
     <td><i>Thanks, Matt!</i></td>
-    <td>no harm = ✓</td>
+    <td>✓ harmless</td>
     <td>"Matte" is the correct inflected form of "Matt".</td>
   </tr>
   <tr>
     <td><i>Ahoj, Matte!</i></td>
     <td><i>Hi, Matt!</i></td>
-    <td>no harm = ✓</td>
-    <td>"Matte" is translated correctly; "Hi" is wrong but it is a different span.</td>
+    <td>✓ harmless</td>
+    <td>"Matte" is correct. "Hi" is wrong but it is a different span.</td>
   </tr>
   <tr>
     <td><i>Díky, Pat!</i></td>
     <td><i>Thanks, Pat!</i></td>
-    <td>harm = ✗</td>
-    <td>"Pat" is a wrong name.</td>
+    <td>✗ harmful</td>
+    <td>"Pat" is a different name.</td>
   </tr>
 </table>
-
-<h3>Step by step</h3>
-
-<p>
-  For each span:
-</p>
-
-<ol>
-  <li>Listen to the audio, read the source and find the <mark>highlighted</mark> harmful span in the first translation(s).</li>
-  <li>There are other multiple translations. Mark <b>Your judgement</b> for them: ✓ if it does not contain harm corresponding to the highlighted one, ✗ if it contains the same harm.</li>
-  <li>If all provided translations contain the harm, write at least one contrastive translation without the harm.</li>
-  <li>Write one or more verification rules for the highlighted harm. The rules must work on every translation, not only on the provided ones.</li>
-  <li>Click <b>Verify</b> and wait until the AI judge has verified the rules on all translations.</li>
-  <li>Where the AI judge's verdict differs from your judgement, rewrite a rule or add additional one. Then verify again.</li>
-  <li>When done, mark the span as:
-    <ul>
-      <li><b>finished</b></li>
-      <li><b>undecidable</b>: you cannot decide the span, e.g. when you think there is no harm in the highlighted span.</li>
-      <li><b>remove</b>: you are sure that this span should not be included in the evaluation benchmark. e.g. if another span
-        in the same segment covers the same error as this span.</li>
-    </ul>
-  </li>
-</ol>
 
 
 <h3>Verification rules</h3>
 
 <ul>
   <li>
-    Write a short instruction for AI judge. The rule should clearly have a pass/fail conclusion.
+    Write a rule for an AI judge. The AI judge is a text LLM prompted: given rule, source and target translation, print pass/fail depending on translation fulfilling the rule. 
   </li>
   <li>
     In this task, write verification rules to target <b>only</b> the harm in the <mark>highlighted</mark> span.
   </li>
   <li>
+    The rule should clearly have a pass/fail conclusion.
+  </li>
+  <li>
     Frame your rule as generally as possible in testing the highlighted harm, rather than hyper-specifically
-    targeting the provided wrong translations. It should be specific enough to catch harmful translations but flexible enough
+    targeting the provided translations. It should be specific enough to catch harmful translations but flexible enough
     to pass any harmless phrasing.
   </li>
   <li>
@@ -198,7 +197,7 @@
     The verification rule should be written in English regardless of the source and target languages.
   </li>
   <li>
-    The overall result is ✓ pass = not harmful if all rules pass, and ✗ fail = harmful if any rule fails.
+    Combination of rules: ✓ pass = harmless if all rules pass, ✗ fail = harmful if any rule fails.
   </li>
 </ul>
 
@@ -219,19 +218,18 @@
     <b>Span list</b> (left panel): the mark in front of each span is its work status:
     <code>-</code> pending, <code>!</code> in progress, <code>.</code> finished, <code>x</code> remove, <code>?</code> undecidable.
     Type a mark or a word into the filter to find spans.
-    Spans of the same segment are grouped (<code>├─</code> / <code>└─</code>), and the header then shows <span class="multi">span k / n</span>.
+    Multiple spans of the same inputs are grouped (<code>└─</code> / <code>├─</code>), and the page header then shows <span class="multi">span 1 / 2</span> (1st out of 2, or other numbers).
   </li>
   <li>
     <b>Table</b>, from left to right:
     <ul>
       <li><b>translation</b>: the first row is the translation with the <mark>highlighted</mark> harmful span that is confirmed by human experts. Other confirmed spans
         of the same segment are <mark class="o">underlined with dashes</mark>.</li>
-      <li><b>Your judgement</b>: the translation with the confirmed harm is always ✗. For every other translation, click ✓
-        (no harm in this span) or ✗ (the same harm); click again to clear.</li>
-      <li><b>AI with rules</b>: one column per rule (R1, R2, …) and <i>overall</i>. With only one rule, R1 is the overall
+      <li><b>Your judgement</b>: the translation with the confirmed harm is always ✗. For every other translation, click ✓ = harmless or ✗ harmful; click again to clear.</li>
+      <li><b>AI with rules</b>: one column per rule (R1, R2, …) and <i>overall</i> combination of rules. With only one rule, R1 is the overall
         verdict and there is no <i>overall</i> column.</li>
     <li>
-     <b>Verdicts:</b> ✓ pass = not harmful, ✗ fail = harmful, ? the AI judge did not answer, · not verified yet.
+     <b>Verdicts:</b> ✓ pass = harmless, ✗ fail = harmful, ? the AI judge did not answer, · not verified yet.
    </li>
 
     </ul>
